@@ -14,16 +14,13 @@ import androidx.compose.foundation.layout.Box
 import androidx.compose.foundation.layout.Column
 import androidx.compose.foundation.layout.Row
 import androidx.compose.foundation.layout.Spacer
-import androidx.compose.foundation.layout.aspectRatio
 import androidx.compose.foundation.layout.fillMaxHeight
 import androidx.compose.foundation.layout.fillMaxSize
 import androidx.compose.foundation.layout.fillMaxWidth
 import androidx.compose.foundation.layout.height
 import androidx.compose.foundation.layout.heightIn
 import androidx.compose.foundation.layout.padding
-import androidx.compose.foundation.rememberScrollState
 import androidx.compose.foundation.shape.RoundedCornerShape
-import androidx.compose.foundation.verticalScroll
 import androidx.compose.material.icons.Icons
 import androidx.compose.material.icons.filled.Settings
 import androidx.compose.material3.Card
@@ -109,19 +106,18 @@ fun HomeScreen(onOpenSettings: () -> Unit) {
             modifier = Modifier
                 .fillMaxSize()
                 .padding(padding)
-                .verticalScroll(rememberScrollState())
-                .padding(12.dp),
+                .padding(horizontal = 12.dp, vertical = 8.dp),
         ) {
             StatCards(state)
-            Spacer(Modifier.height(8.dp))
+            Spacer(Modifier.height(4.dp))
             FeedbackText(game.feedback, game.feedbackBad)
+            Spacer(Modifier.height(4.dp))
+            FarmGrid(state, nowMs, modifier = Modifier.weight(1f), onPlotClick = { game.clickPlot(it) })
             Spacer(Modifier.height(8.dp))
-            FarmGrid(state, nowMs, onPlotClick = { game.clickPlot(it) })
-            Spacer(Modifier.height(14.dp))
             SeedShelf(state.selectedSeed, onSelect = { game.selectSeed(it) })
-            Spacer(Modifier.height(14.dp))
-            UpgradesRow(state, costFn = game::upgradeCost, onBuy = { game.buyUpgrade(it) })
             Spacer(Modifier.height(8.dp))
+            UpgradesRow(state, costFn = game::upgradeCost, onBuy = { game.buyUpgrade(it) })
+            Spacer(Modifier.height(4.dp))
         }
     }
 }
@@ -203,18 +199,26 @@ private fun FeedbackText(msg: String?, bad: Boolean) {
 }
 
 @Composable
-private fun FarmGrid(s: FarmState, nowMs: Long, onPlotClick: (Int) -> Unit) {
+private fun FarmGrid(s: FarmState, nowMs: Long, modifier: Modifier = Modifier, onPlotClick: (Int) -> Unit) {
     Box(
-        modifier = Modifier
+        modifier = modifier
             .fillMaxWidth()
             .clip(RoundedCornerShape(16.dp))
             .background(SoilColor)
             .border(4.dp, SoilDarkColor, RoundedCornerShape(16.dp))
             .padding(8.dp),
     ) {
-        Column(verticalArrangement = Arrangement.spacedBy(6.dp)) {
+        Column(
+            modifier = Modifier.fillMaxSize(),
+            verticalArrangement = Arrangement.spacedBy(6.dp),
+        ) {
             for (r in 0 until 4) {
-                Row(horizontalArrangement = Arrangement.spacedBy(6.dp)) {
+                Row(
+                    modifier = Modifier
+                        .weight(1f)
+                        .fillMaxWidth(),
+                    horizontalArrangement = Arrangement.spacedBy(6.dp),
+                ) {
                     for (c in 0 until 4) {
                         val idx = r * 4 + c
                         PlotCell(
@@ -222,7 +226,7 @@ private fun FarmGrid(s: FarmState, nowMs: Long, onPlotClick: (Int) -> Unit) {
                             nowMs = nowMs,
                             modifier = Modifier
                                 .weight(1f)
-                                .aspectRatio(1f),
+                                .fillMaxHeight(),
                             onClick = { onPlotClick(idx) },
                         )
                     }
