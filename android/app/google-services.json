@@ -1,10 +1,29 @@
 {
-  "_comment": "REPLACE_ME — placeholder so the template builds without Firebase. Drop your real google-services.json from the Firebase console here to enable FCM. The build script skips applying com.google.gms.google-services while this REPLACE_ME sentinel is present.",
   "project_info": {
-    "project_number": "REPLACE_ME",
-    "project_id": "REPLACE_ME",
-    "storage_bucket": "REPLACE_ME"
+    "project_number": "450526211046",
+    "project_id": "charming-farmer",
+    "storage_bucket": "charming-farmer.firebasestorage.app"
   },
-  "client": [],
+  "client": [
+    {
+      "client_info": {
+        "mobilesdk_app_id": "1:450526211046:android:752f7e41a3aea41df5c427",
+        "android_client_info": {
+          "package_name": "com.shadaeiou.charmingfarmer"
+        }
+      },
+      "oauth_client": [],
+      "api_key": [
+        {
+          "current_key": "AIzaSyAVfIPhTowyNQ5QNK0vn5GprtzrOfyF_RU"
+        }
+      ],
+      "services": {
+        "appinvite_service": {
+          "other_platform_oauth_client": []
+        }
+      }
+    }
+  ],
   "configuration_version": "1"
 }
