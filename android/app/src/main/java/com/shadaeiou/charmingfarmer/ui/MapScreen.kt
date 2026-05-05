@@ -38,7 +38,7 @@ import androidx.compose.ui.unit.sp
 
 @OptIn(ExperimentalMaterial3Api::class)
 @Composable
-fun MapScreen(onGoToFarm: () -> Unit, onClose: () -> Unit) {
+fun MapScreen(onGoToFarm: () -> Unit, onGoToPond: () -> Unit, onClose: () -> Unit) {
     val context = LocalContext.current
     Scaffold(
         topBar = {
@@ -88,11 +88,11 @@ fun MapScreen(onGoToFarm: () -> Unit, onClose: () -> Unit) {
                         onClick = onGoToFarm,
                     )
                     LocationCard(
-                        emoji = "⛏️",
-                        name = "Mine",
-                        unlocked = false,
+                        emoji = "🎣",
+                        name = "Pond",
+                        unlocked = true,
                         modifier = Modifier.weight(1f),
-                        onClick = { Toast.makeText(context, "Coming soon!", Toast.LENGTH_SHORT).show() },
+                        onClick = onGoToPond,
                     )
                 }
                 Row(

@@ -351,6 +351,24 @@ class FarmGame(context: Context) {
         save()
     }
 
+    // Lets other screens (e.g. fishing) consume from the shared energy pool
+    // without exposing the private state setter. Returns false if there
+    // wasn't enough energy; the caller chooses how to surface that.
+    fun spendEnergy(amount: Int): Boolean {
+        tick()
+        val s = state
+        if (s.energy < amount) return false
+        state = s.copy(energy = s.energy - amount)
+        save()
+        return true
+    }
+
+    fun addCoins(amount: Int) {
+        if (amount == 0) return
+        state = state.copy(coins = state.coins + amount)
+        save()
+    }
+
     private fun note(msg: String) { feedback = msg; feedbackBad = false }
     private fun fail(msg: String) { feedback = msg; feedbackBad = true }
 

@@ -22,10 +22,11 @@ import androidx.navigation.compose.composable
 import androidx.navigation.compose.rememberNavController
 import com.shadaeiou.charmingfarmer.data.DownloadResult
 import com.shadaeiou.charmingfarmer.data.Updater
+import com.shadaeiou.charmingfarmer.ui.FarmerTheme
+import com.shadaeiou.charmingfarmer.ui.FishingScreen
 import com.shadaeiou.charmingfarmer.ui.HomeScreen
 import com.shadaeiou.charmingfarmer.ui.MapScreen
 import com.shadaeiou.charmingfarmer.ui.SettingsScreen
-import com.shadaeiou.charmingfarmer.ui.FarmerTheme
 import kotlinx.coroutines.CoroutineScope
 import kotlinx.coroutines.Dispatchers
 import kotlinx.coroutines.SupervisorJob
@@ -160,7 +161,18 @@ private fun Root() {
                     saveLastDest("home")
                     nav.navigate("home") { popUpTo("map") { inclusive = true } }
                 },
+                onGoToPond = {
+                    saveLastDest("pond")
+                    nav.navigate("pond") { popUpTo("map") { inclusive = true } }
+                },
                 onClose = { nav.popBackStack() },
+            )
+        }
+        composable("pond") {
+            saveLastDest("pond")
+            FishingScreen(
+                onBack = { nav.popBackStack() },
+                onOpenMap = { nav.navigate("map") },
             )
         }
     }
