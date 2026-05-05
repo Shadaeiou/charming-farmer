@@ -18,9 +18,39 @@ enum class CropType(
     val plantEnergy: Int,
 ) {
     CARROT("Carrot", "🥕", "🌱", 3, 20_000L, 8, 2),
+    POTATO("Potato", "🥔", "🌱", 4, 25_000L, 11, 2),
+    LETTUCE("Lettuce", "🥬", "🌱", 5, 30_000L, 13, 2),
+    ONION("Onion", "🧅", "🌱", 6, 35_000L, 17, 2),
     WHEAT("Wheat", "🌾", "🌱", 8, 60_000L, 22, 3),
+    CORN("Corn", "🌽", "🌱", 9, 65_000L, 25, 3),
+    BEAN("Bean", "🫘", "🌱", 10, 70_000L, 28, 3),
+    STRAWBERRY("Strawberry", "🍓", "🌱", 11, 80_000L, 32, 3),
+    MUSHROOM("Mushroom", "🍄", "🌱", 13, 85_000L, 37, 3),
+    APPLE("Apple", "🍎", "🌿", 15, 100_000L, 44, 3),
+    BROCCOLI("Broccoli", "🥦", "🌱", 16, 105_000L, 47, 3),
+    ZUCCHINI("Zucchini", "🥒", "🌱", 17, 110_000L, 50, 4),
     TOMATO("Tomato", "🍅", "🌿", 18, 120_000L, 55, 4),
+    CHERRY("Cherry", "🍒", "🌿", 20, 130_000L, 58, 4),
+    BLUEBERRY("Blueberry", "🫐", "🌱", 22, 140_000L, 65, 4),
+    PEACH("Peach", "🍑", "🌿", 24, 155_000L, 70, 4),
+    BANANA("Banana", "🍌", "🌿", 26, 165_000L, 77, 4),
+    ORANGE("Orange", "🍊", "🌿", 28, 175_000L, 83, 4),
+    PEAR("Pear", "🍐", "🌿", 32, 200_000L, 95, 5),
+    GRAPE("Grape", "🍇", "🌱", 36, 220_000L, 108, 5),
+    PEPPER("Pepper", "🫑", "🌿", 38, 235_000L, 114, 5),
     PUMPKIN("Pumpkin", "🎃", "🌿", 40, 300_000L, 140, 6),
+    LEMON("Lemon", "🍋", "🌿", 42, 260_000L, 125, 5),
+    AVOCADO("Avocado", "🥑", "🌿", 48, 295_000L, 143, 6),
+    KIWI("Kiwi", "🥝", "🌱", 55, 330_000L, 164, 6),
+    PEANUT("Peanut", "🥜", "🌱", 65, 400_000L, 195, 6),
+    GARLIC("Garlic", "🧄", "🌱", 70, 430_000L, 210, 7),
+    HOT_PEPPER("Hot Pepper", "🌶️", "🌿", 80, 490_000L, 240, 7),
+    CHESTNUT("Chestnut", "🌰", "🌿", 90, 550_000L, 270, 7),
+    MANGO("Mango", "🥭", "🌿", 100, 600_000L, 300, 8),
+    OLIVE("Olive", "🫒", "🌿", 120, 720_000L, 360, 8),
+    PINEAPPLE("Pineapple", "🍍", "🌿", 140, 840_000L, 420, 9),
+    WATERMELON("Watermelon", "🍉", "🌿", 160, 960_000L, 480, 9),
+    COCONUT("Coconut", "🥥", "🌿", 200, 1_200_000L, 600, 10),
 }
 
 enum class PlotKind { GRASS, TILLED, PLANTED }
@@ -51,6 +81,9 @@ data class Upgrade(
 val UPGRADES = listOf(
     Upgrade("maxEnergy", "Bigger Lungs", "+10 max energy", 30, 1.6),
     Upgrade("regen", "Strong Coffee", "−15% regen time", 45, 1.8),
+    Upgrade("growthSpeed", "Fertilizer", "+15% grow speed", 60, 1.9),
+    Upgrade("sellBonus", "Market Stall", "+2 sell coins", 55, 1.85),
+    Upgrade("waterBonus", "Garden Hose", "+5% water bonus", 40, 1.75),
 )
 
 const val ENERGY_TILL = 3
@@ -69,7 +102,10 @@ data class FarmState(
     val coins: Int = STARTING_COINS,
     val harvested: Int = 0,
     val selectedSeed: CropType = CropType.CARROT,
-    val upgradeLevels: Map<String, Int> = mapOf("maxEnergy" to 0, "regen" to 0),
+    val upgradeLevels: Map<String, Int> = mapOf(
+        "maxEnergy" to 0, "regen" to 0,
+        "growthSpeed" to 0, "sellBonus" to 0, "waterBonus" to 0,
+    ),
     val plots: List<Plot> = List(PLOT_COUNT) { Plot() },
 )
 
@@ -130,6 +166,8 @@ class FarmGame(context: Context) {
         val crop = s.selectedSeed
         if (s.coins < crop.coinCost) { fail("Need 🪙${crop.coinCost}"); return }
         if (s.energy < crop.plantEnergy) { fail("Need ⚡${crop.plantEnergy}"); return }
+        val growthSpeedLvl = s.upgradeLevels["growthSpeed"] ?: 0
+        val speedBonus = (crop.growthMs * 0.15 * growthSpeedLvl).toLong()
         state = s.copy(
             energy = s.energy - crop.plantEnergy,
             coins = s.coins - crop.coinCost,
@@ -137,6 +175,7 @@ class FarmGame(context: Context) {
                 kind = PlotKind.PLANTED,
                 crop = crop,
                 plantedAtMs = now,
+                bonusMs = speedBonus,
             )),
         )
         note("Planted ${crop.displayName.lowercase()}!")
@@ -148,20 +187,23 @@ class FarmGame(context: Context) {
         when {
             p.isReady(now) -> {
                 if (s.energy < ENERGY_HARVEST) { fail("Need ⚡$ENERGY_HARVEST"); return }
+                val sellBonusLvl = s.upgradeLevels["sellBonus"] ?: 0
+                val earned = crop.sellPrice + sellBonusLvl * 2
                 state = s.copy(
                     energy = s.energy - ENERGY_HARVEST,
-                    coins = s.coins + crop.sellPrice,
+                    coins = s.coins + earned,
                     harvested = s.harvested + 1,
                     plots = s.plots.replaceAt(idx, Plot()),
                 )
-                note("Harvested ${crop.displayName.lowercase()}! +🪙${crop.sellPrice}")
+                note("Harvested ${crop.displayName.lowercase()}! +🪙$earned")
                 save()
             }
             !p.watered -> {
                 if (s.energy < ENERGY_WATER) { fail("Need ⚡$ENERGY_WATER"); return }
                 val elapsed = now - p.plantedAtMs + p.bonusMs
                 val remaining = (crop.growthMs - elapsed).coerceAtLeast(0)
-                val bonus = (remaining * 0.30).toLong()
+                val waterBonusLvl = s.upgradeLevels["waterBonus"] ?: 0
+                val bonus = (remaining * (0.30 + waterBonusLvl * 0.05)).toLong()
                 state = s.copy(
                     energy = s.energy - ENERGY_WATER,
                     plots = s.plots.replaceAt(idx, p.copy(watered = true, bonusMs = p.bonusMs + bonus)),
@@ -274,6 +316,9 @@ class FarmGame(context: Context) {
             }
             if (!upMap.containsKey("maxEnergy")) upMap["maxEnergy"] = 0
             if (!upMap.containsKey("regen")) upMap["regen"] = 0
+            if (!upMap.containsKey("growthSpeed")) upMap["growthSpeed"] = 0
+            if (!upMap.containsKey("sellBonus")) upMap["sellBonus"] = 0
+            if (!upMap.containsKey("waterBonus")) upMap["waterBonus"] = 0
             FarmState(
                 energy = o.optDouble("energy", STARTING_ENERGY.toDouble()).toFloat(),
                 maxEnergy = o.optInt("maxEnergy", STARTING_ENERGY),

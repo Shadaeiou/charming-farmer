@@ -9,21 +9,21 @@ import androidx.compose.animation.core.tween
 import androidx.compose.foundation.background
 import androidx.compose.foundation.border
 import androidx.compose.foundation.clickable
+import androidx.compose.foundation.horizontalScroll
 import androidx.compose.foundation.layout.Arrangement
 import androidx.compose.foundation.layout.Box
 import androidx.compose.foundation.layout.Column
 import androidx.compose.foundation.layout.Row
 import androidx.compose.foundation.layout.Spacer
-import androidx.compose.foundation.layout.aspectRatio
 import androidx.compose.foundation.layout.fillMaxHeight
 import androidx.compose.foundation.layout.fillMaxSize
 import androidx.compose.foundation.layout.fillMaxWidth
 import androidx.compose.foundation.layout.height
 import androidx.compose.foundation.layout.heightIn
 import androidx.compose.foundation.layout.padding
+import androidx.compose.foundation.layout.width
 import androidx.compose.foundation.rememberScrollState
 import androidx.compose.foundation.shape.RoundedCornerShape
-import androidx.compose.foundation.verticalScroll
 import androidx.compose.material.icons.Icons
 import androidx.compose.material.icons.filled.Settings
 import androidx.compose.material3.Card
@@ -109,19 +109,18 @@ fun HomeScreen(onOpenSettings: () -> Unit) {
             modifier = Modifier
                 .fillMaxSize()
                 .padding(padding)
-                .verticalScroll(rememberScrollState())
-                .padding(12.dp),
+                .padding(horizontal = 12.dp, vertical = 8.dp),
         ) {
             StatCards(state)
-            Spacer(Modifier.height(8.dp))
+            Spacer(Modifier.height(4.dp))
             FeedbackText(game.feedback, game.feedbackBad)
+            Spacer(Modifier.height(4.dp))
+            FarmGrid(state, nowMs, modifier = Modifier.weight(1f), onPlotClick = { game.clickPlot(it) })
             Spacer(Modifier.height(8.dp))
-            FarmGrid(state, nowMs, onPlotClick = { game.clickPlot(it) })
-            Spacer(Modifier.height(14.dp))
             SeedShelf(state.selectedSeed, onSelect = { game.selectSeed(it) })
-            Spacer(Modifier.height(14.dp))
-            UpgradesRow(state, costFn = game::upgradeCost, onBuy = { game.buyUpgrade(it) })
             Spacer(Modifier.height(8.dp))
+            UpgradesRow(state, costFn = game::upgradeCost, onBuy = { game.buyUpgrade(it) })
+            Spacer(Modifier.height(4.dp))
         }
     }
 }
@@ -203,18 +202,26 @@ private fun FeedbackText(msg: String?, bad: Boolean) {
 }
 
 @Composable
-private fun FarmGrid(s: FarmState, nowMs: Long, onPlotClick: (Int) -> Unit) {
+private fun FarmGrid(s: FarmState, nowMs: Long, modifier: Modifier = Modifier, onPlotClick: (Int) -> Unit) {
     Box(
-        modifier = Modifier
+        modifier = modifier
             .fillMaxWidth()
             .clip(RoundedCornerShape(16.dp))
             .background(SoilColor)
             .border(4.dp, SoilDarkColor, RoundedCornerShape(16.dp))
             .padding(8.dp),
     ) {
-        Column(verticalArrangement = Arrangement.spacedBy(6.dp)) {
+        Column(
+            modifier = Modifier.fillMaxSize(),
+            verticalArrangement = Arrangement.spacedBy(6.dp),
+        ) {
             for (r in 0 until 4) {
-                Row(horizontalArrangement = Arrangement.spacedBy(6.dp)) {
+                Row(
+                    modifier = Modifier
+                        .weight(1f)
+                        .fillMaxWidth(),
+                    horizontalArrangement = Arrangement.spacedBy(6.dp),
+                ) {
                     for (c in 0 until 4) {
                         val idx = r * 4 + c
                         PlotCell(
@@ -222,7 +229,7 @@ private fun FarmGrid(s: FarmState, nowMs: Long, onPlotClick: (Int) -> Unit) {
                             nowMs = nowMs,
                             modifier = Modifier
                                 .weight(1f)
-                                .aspectRatio(1f),
+                                .fillMaxHeight(),
                             onClick = { onPlotClick(idx) },
                         )
                     }
@@ -322,14 +329,16 @@ private fun SeedShelf(selected: CropType, onSelect: (CropType) -> Unit) {
         )
         Spacer(Modifier.height(6.dp))
         Row(
-            Modifier.fillMaxWidth(),
+            modifier = Modifier
+                .fillMaxWidth()
+                .horizontalScroll(rememberScrollState()),
             horizontalArrangement = Arrangement.spacedBy(6.dp),
         ) {
             for (c in CropType.entries) {
                 SeedButton(
                     crop = c,
                     selected = c == selected,
-                    modifier = Modifier.weight(1f),
+                    modifier = Modifier.width(80.dp),
                     onClick = { onSelect(c) },
                 )
             }
@@ -354,10 +363,10 @@ private fun SeedButton(
             .background(bg)
             .border(if (selected) 3.dp else 2.dp, borderColor, RoundedCornerShape(10.dp))
             .clickable { onClick() }
-            .padding(vertical = 8.dp, horizontal = 4.dp),
+            .padding(vertical = 6.dp, horizontal = 4.dp),
         horizontalAlignment = Alignment.CenterHorizontally,
     ) {
-        Text(crop.emoji, fontSize = 28.sp)
+        Text(crop.emoji, fontSize = 22.sp)
         Text(
             crop.displayName,
             style = MaterialTheme.typography.labelMedium,
@@ -385,38 +394,43 @@ private fun UpgradesRow(s: FarmState, costFn: (Upgrade) -> Int, onBuy: (Upgrade)
             fontWeight = FontWeight.Bold,
         )
         Spacer(Modifier.height(6.dp))
+        val affordable = UPGRADES.filter { s.coins >= costFn(it) }
+        val unavailable = UPGRADES.filter { s.coins < costFn(it) }
         Row(
-            Modifier.fillMaxWidth(),
+            modifier = Modifier
+                .fillMaxWidth()
+                .horizontalScroll(rememberScrollState()),
             horizontalArrangement = Arrangement.spacedBy(6.dp),
         ) {
-            for (up in UPGRADES) {
+            for (up in affordable + unavailable) {
                 val cost = costFn(up)
                 val lvl = s.upgradeLevels[up.key] ?: 0
-                val affordable = s.coins >= cost
+                val canBuy = s.coins >= cost
                 Column(
                     modifier = Modifier
-                        .weight(1f)
+                        .width(100.dp)
                         .clip(RoundedCornerShape(10.dp))
                         .background(
-                            if (affordable) MaterialTheme.colorScheme.primaryContainer
+                            if (canBuy) MaterialTheme.colorScheme.primaryContainer
                             else MaterialTheme.colorScheme.surfaceVariant
                         )
                         .border(
                             2.dp,
-                            if (affordable) MaterialTheme.colorScheme.primary
-                            else MaterialTheme.colorScheme.outline.copy(alpha = 0.4f),
+                            if (canBuy) MaterialTheme.colorScheme.primary
+                            else MaterialTheme.colorScheme.outline.copy(alpha = 0.3f),
                             RoundedCornerShape(10.dp),
                         )
-                        .clickable(enabled = affordable) { onBuy(up) }
-                        .padding(8.dp),
+                        .clickable(enabled = canBuy) { onBuy(up) }
+                        .padding(6.dp),
                     horizontalAlignment = Alignment.CenterHorizontally,
                 ) {
-                    val labelColor = if (affordable) MaterialTheme.colorScheme.onPrimaryContainer
+                    val labelColor = if (canBuy) MaterialTheme.colorScheme.onPrimaryContainer
                         else MaterialTheme.colorScheme.onSurfaceVariant
                     Text(
                         up.label,
-                        style = MaterialTheme.typography.labelLarge,
+                        style = MaterialTheme.typography.labelMedium,
                         fontWeight = FontWeight.Bold,
+                        textAlign = TextAlign.Center,
                         color = labelColor,
                     )
                     Text(
@@ -425,10 +439,10 @@ private fun UpgradesRow(s: FarmState, costFn: (Upgrade) -> Int, onBuy: (Upgrade)
                         textAlign = TextAlign.Center,
                         color = labelColor,
                     )
-                    Spacer(Modifier.height(4.dp))
+                    Spacer(Modifier.height(2.dp))
                     Text(
                         "🪙$cost · lv $lvl",
-                        style = MaterialTheme.typography.labelMedium,
+                        style = MaterialTheme.typography.labelSmall,
                         color = labelColor,
                     )
                 }
