@@ -8,13 +8,13 @@ data class ReleaseNote(
 
 val CHANGELOG: List<ReleaseNote> = listOf(
     ReleaseNote(
-        version = "0.1.19",
+        version = "0.1.20",
         date = "2026-05-05",
         bullets = listOf(
             "New atlas destination: 🎣 Pond. Tap the water to cast a line (⚡5), wait for the bite, then tap during the window to reel it in",
             "Ten fish from minnow (🪙10) to whale (🪙8000); rarer fish are wildly more lucrative",
             "Energy and coins are shared with the farm — fishing is just another way to spend the same energy pool",
-            "Mine destination temporarily replaced by Pond on the atlas while fishing settles in",
+            "Atlas now has three rows: Farm + Pond, Mine + Kitchen, Market — Mine is back in its old spot",
         ),
     ),
     ReleaseNote(

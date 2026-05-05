@@ -100,12 +100,24 @@ fun MapScreen(onGoToFarm: () -> Unit, onGoToPond: () -> Unit, onClose: () -> Uni
                     horizontalArrangement = Arrangement.spacedBy(16.dp),
                 ) {
                     LocationCard(
+                        emoji = "⛏️",
+                        name = "Mine",
+                        unlocked = false,
+                        modifier = Modifier.weight(1f),
+                        onClick = { Toast.makeText(context, "Coming soon!", Toast.LENGTH_SHORT).show() },
+                    )
+                    LocationCard(
                         emoji = "🍳",
                         name = "Kitchen",
                         unlocked = false,
                         modifier = Modifier.weight(1f),
                         onClick = { Toast.makeText(context, "Coming soon!", Toast.LENGTH_SHORT).show() },
                     )
+                }
+                Row(
+                    modifier = Modifier.fillMaxWidth(),
+                    horizontalArrangement = Arrangement.spacedBy(16.dp),
+                ) {
                     LocationCard(
                         emoji = "🏪",
                         name = "Market",
@@ -113,6 +125,9 @@ fun MapScreen(onGoToFarm: () -> Unit, onGoToPond: () -> Unit, onClose: () -> Uni
                         modifier = Modifier.weight(1f),
                         onClick = { Toast.makeText(context, "Coming soon!", Toast.LENGTH_SHORT).show() },
                     )
+                    // Empty slot keeps Market half-width so the grid stays a
+                    // consistent 2-column layout. Add the next destination here.
+                    Spacer(modifier = Modifier.weight(1f))
                 }
             }
         }
