@@ -2,6 +2,7 @@ package com.shadaeiou.charmingfarmer
 
 import android.Manifest
 import android.annotation.SuppressLint
+import android.content.Context
 import android.content.Intent
 import android.content.pm.PackageManager
 import android.os.Build
@@ -14,6 +15,7 @@ import androidx.compose.foundation.layout.fillMaxSize
 import androidx.compose.material3.Surface
 import androidx.compose.runtime.Composable
 import androidx.compose.ui.Modifier
+import androidx.compose.ui.platform.LocalContext
 import androidx.core.content.ContextCompat
 import androidx.navigation.compose.NavHost
 import androidx.navigation.compose.composable
@@ -21,6 +23,7 @@ import androidx.navigation.compose.rememberNavController
 import com.shadaeiou.charmingfarmer.data.DownloadResult
 import com.shadaeiou.charmingfarmer.data.Updater
 import com.shadaeiou.charmingfarmer.ui.HomeScreen
+import com.shadaeiou.charmingfarmer.ui.MapScreen
 import com.shadaeiou.charmingfarmer.ui.SettingsScreen
 import com.shadaeiou.charmingfarmer.ui.FarmerTheme
 import kotlinx.coroutines.CoroutineScope
@@ -28,6 +31,9 @@ import kotlinx.coroutines.Dispatchers
 import kotlinx.coroutines.SupervisorJob
 import kotlinx.coroutines.launch
 import kotlinx.coroutines.withContext
+
+private const val PREFS_NAV = "charming-farmer-nav"
+private const val KEY_LAST_DEST = "last_dest"
 
 class MainActivity : ComponentActivity() {
 
@@ -126,13 +132,36 @@ class MainActivity : ComponentActivity() {
 
 @Composable
 private fun Root() {
+    val context = LocalContext.current
+    val prefs = context.getSharedPreferences(PREFS_NAV, Context.MODE_PRIVATE)
+    val startDest = prefs.getString(KEY_LAST_DEST, "home") ?: "home"
+
+    fun saveLastDest(dest: String) = prefs.edit().putString(KEY_LAST_DEST, dest).apply()
+
     val nav = rememberNavController()
-    NavHost(navController = nav, startDestination = "home") {
+    NavHost(navController = nav, startDestination = startDest) {
         composable("home") {
-            HomeScreen(onOpenSettings = { nav.navigate("settings") })
+            saveLastDest("home")
+            HomeScreen(
+                onOpenSettings = { nav.navigate("settings") },
+                onOpenMap = { nav.navigate("map") },
+            )
         }
         composable("settings") {
-            SettingsScreen(onBack = { nav.popBackStack() })
+            SettingsScreen(
+                onBack = { nav.popBackStack() },
+                onOpenMap = { nav.navigate("map") },
+            )
+        }
+        composable("map") {
+            saveLastDest("map")
+            MapScreen(
+                onGoToFarm = {
+                    saveLastDest("home")
+                    nav.navigate("home") { popUpTo("map") { inclusive = true } }
+                },
+                onClose = { nav.popBackStack() },
+            )
         }
     }
 }

@@ -8,6 +8,18 @@ data class ReleaseNote(
 
 val CHANGELOG: List<ReleaseNote> = listOf(
     ReleaseNote(
+        version = "0.1.13",
+        date = "2026-05-05",
+        bullets = listOf(
+            "Atlas map with Farm, Mine, Kitchen, and Market — Mine, Kitchen, and Market coming soon",
+            "Map icon in top bar opens the atlas; X button closes it back to your last screen",
+            "App remembers which screen you were on and reopens it next launch",
+            "Unaffordable seeds and trees are now greyed out in place (order unchanged)",
+            "Seed and tree shelf buttons are more compact — more items visible at a glance",
+            "Upgrades now cost significantly more at higher levels",
+        ),
+    ),
+    ReleaseNote(
         version = "0.3.0",
         date = "2026-05-05",
         bullets = listOf(

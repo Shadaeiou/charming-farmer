@@ -12,6 +12,7 @@ import androidx.compose.foundation.clickable
 import androidx.compose.foundation.horizontalScroll
 import androidx.compose.foundation.layout.Arrangement
 import androidx.compose.foundation.layout.Box
+import androidx.compose.foundation.layout.BoxWithConstraints
 import androidx.compose.foundation.layout.Column
 import androidx.compose.foundation.layout.Row
 import androidx.compose.foundation.layout.Spacer
@@ -21,10 +22,13 @@ import androidx.compose.foundation.layout.fillMaxWidth
 import androidx.compose.foundation.layout.height
 import androidx.compose.foundation.layout.heightIn
 import androidx.compose.foundation.layout.padding
+import androidx.compose.foundation.layout.size
 import androidx.compose.foundation.layout.width
 import androidx.compose.foundation.rememberScrollState
 import androidx.compose.foundation.shape.RoundedCornerShape
+import androidx.compose.ui.draw.alpha
 import androidx.compose.material.icons.Icons
+import androidx.compose.material.icons.filled.Map
 import androidx.compose.material.icons.filled.Settings
 import androidx.compose.material3.Card
 import androidx.compose.material3.CardDefaults
@@ -73,7 +77,7 @@ private val ReadyColor = Color(0xFFFFD24A)
 
 @OptIn(ExperimentalMaterial3Api::class)
 @Composable
-fun HomeScreen(onOpenSettings: () -> Unit) {
+fun HomeScreen(onOpenSettings: () -> Unit, onOpenMap: () -> Unit) {
     val ctx = LocalContext.current
     val game = remember { FarmGame(ctx.applicationContext) }
     var nowMs by remember { mutableLongStateOf(System.currentTimeMillis()) }
@@ -96,6 +100,9 @@ fun HomeScreen(onOpenSettings: () -> Unit) {
                 actions = {
                     IconButton(onClick = onOpenSettings) {
                         Icon(Icons.Filled.Settings, contentDescription = "Settings")
+                    }
+                    IconButton(onClick = onOpenMap) {
+                        Icon(Icons.Filled.Map, contentDescription = "Map")
                     }
                 },
                 colors = TopAppBarDefaults.topAppBarColors(
@@ -206,35 +213,35 @@ private fun FeedbackText(msg: String?, bad: Boolean) {
 
 @Composable
 private fun FarmGrid(s: FarmState, nowMs: Long, modifier: Modifier = Modifier, onPlotClick: (Int) -> Unit) {
-    Box(
-        modifier = modifier
-            .fillMaxWidth()
-            .clip(RoundedCornerShape(16.dp))
-            .background(SoilColor)
-            .border(4.dp, SoilDarkColor, RoundedCornerShape(16.dp))
-            .padding(8.dp),
-    ) {
-        Column(
-            modifier = Modifier.fillMaxSize(),
-            verticalArrangement = Arrangement.spacedBy(6.dp),
+    BoxWithConstraints(modifier = modifier.fillMaxWidth()) {
+        val gridSize = minOf(maxWidth, maxHeight)
+        Box(
+            modifier = Modifier
+                .size(gridSize)
+                .align(Alignment.TopCenter)
+                .clip(RoundedCornerShape(16.dp))
+                .background(SoilColor)
+                .border(4.dp, SoilDarkColor, RoundedCornerShape(16.dp))
+                .padding(8.dp),
         ) {
-            for (r in 0 until 4) {
-                Row(
-                    modifier = Modifier
-                        .weight(1f)
-                        .fillMaxWidth(),
-                    horizontalArrangement = Arrangement.spacedBy(6.dp),
-                ) {
-                    for (c in 0 until 4) {
-                        val idx = r * 4 + c
-                        PlotCell(
-                            plot = s.plots[idx],
-                            nowMs = nowMs,
-                            modifier = Modifier
-                                .weight(1f)
-                                .fillMaxHeight(),
-                            onClick = { onPlotClick(idx) },
-                        )
+            Column(
+                modifier = Modifier.fillMaxSize(),
+                verticalArrangement = Arrangement.spacedBy(6.dp),
+            ) {
+                for (r in 0 until 4) {
+                    Row(
+                        modifier = Modifier.weight(1f).fillMaxWidth(),
+                        horizontalArrangement = Arrangement.spacedBy(6.dp),
+                    ) {
+                        for (c in 0 until 4) {
+                            val idx = r * 4 + c
+                            PlotCell(
+                                plot = s.plots[idx],
+                                nowMs = nowMs,
+                                modifier = Modifier.weight(1f).fillMaxHeight(),
+                                onClick = { onPlotClick(idx) },
+                            )
+                        }
                     }
                 }
             }
@@ -364,6 +371,7 @@ private fun SeedShelf(state: FarmState, onSelect: (CropType) -> Unit) {
                 SeedButton(
                     crop = c,
                     selected = state.selectedTree == null && c == state.selectedSeed,
+                    coins = state.coins,
                     modifier = Modifier.width(80.dp),
                     onClick = { onSelect(c) },
                 )
@@ -385,6 +393,7 @@ private fun TreeNursery(state: FarmState, onSelect: (TreeType) -> Unit) {
                 TreeButton(
                     tree = t,
                     selected = t == state.selectedTree,
+                    coins = state.coins,
                     modifier = Modifier.width(88.dp),
                     onClick = { onSelect(t) },
                 )
@@ -394,18 +403,20 @@ private fun TreeNursery(state: FarmState, onSelect: (TreeType) -> Unit) {
 }
 
 @Composable
-private fun TreeButton(tree: TreeType, selected: Boolean, modifier: Modifier, onClick: () -> Unit) {
+private fun TreeButton(tree: TreeType, selected: Boolean, coins: Int, modifier: Modifier, onClick: () -> Unit) {
+    val canAfford = coins >= tree.coinCost
     val borderColor = if (selected) MaterialTheme.colorScheme.tertiary
         else MaterialTheme.colorScheme.outline.copy(alpha = 0.4f)
     val bg = if (selected) MaterialTheme.colorScheme.tertiaryContainer
         else MaterialTheme.colorScheme.surface
     Column(
         modifier = modifier
+            .alpha(if (canAfford) 1f else 0.38f)
             .clip(RoundedCornerShape(10.dp))
             .background(bg)
             .border(if (selected) 3.dp else 2.dp, borderColor, RoundedCornerShape(10.dp))
             .clickable { onClick() }
-            .padding(vertical = 6.dp, horizontal = 4.dp),
+            .padding(vertical = 4.dp, horizontal = 4.dp),
         horizontalAlignment = Alignment.CenterHorizontally,
     ) {
         Text("${tree.treeEmoji}${tree.fruitEmoji}", fontSize = 18.sp)
@@ -416,19 +427,10 @@ private fun TreeButton(tree: TreeType, selected: Boolean, modifier: Modifier, on
             textAlign = TextAlign.Center,
         )
         Text(
-            "🪙${tree.coinCost}",
-            style = MaterialTheme.typography.labelSmall,
+            "🪙${prettyCoins(tree.coinCost)}·${tree.maxHarvests}×${prettyCoins(tree.sellPrice)}·${prettyTime(tree.lifeMs)}",
+            fontSize = 9.sp,
             color = MaterialTheme.colorScheme.onSurfaceVariant,
-        )
-        Text(
-            "${tree.maxHarvests}×🪙${tree.sellPrice}",
-            style = MaterialTheme.typography.labelSmall,
-            color = MaterialTheme.colorScheme.onSurfaceVariant,
-        )
-        Text(
-            prettyTime(tree.lifeMs),
-            style = MaterialTheme.typography.labelSmall,
-            color = MaterialTheme.colorScheme.onSurfaceVariant,
+            textAlign = TextAlign.Center,
         )
     }
 }
@@ -437,37 +439,37 @@ private fun TreeButton(tree: TreeType, selected: Boolean, modifier: Modifier, on
 private fun SeedButton(
     crop: CropType,
     selected: Boolean,
+    coins: Int,
     modifier: Modifier,
     onClick: () -> Unit,
 ) {
+    val canAfford = coins >= crop.coinCost
     val borderColor = if (selected) MaterialTheme.colorScheme.secondary
         else MaterialTheme.colorScheme.outline.copy(alpha = 0.4f)
     val bg = if (selected) MaterialTheme.colorScheme.secondaryContainer
         else MaterialTheme.colorScheme.surface
     Column(
         modifier = modifier
+            .alpha(if (canAfford) 1f else 0.38f)
             .clip(RoundedCornerShape(10.dp))
             .background(bg)
             .border(if (selected) 3.dp else 2.dp, borderColor, RoundedCornerShape(10.dp))
             .clickable { onClick() }
-            .padding(vertical = 6.dp, horizontal = 4.dp),
+            .padding(vertical = 4.dp, horizontal = 4.dp),
         horizontalAlignment = Alignment.CenterHorizontally,
     ) {
         Text(crop.emoji, fontSize = 22.sp)
         Text(
             crop.displayName,
-            style = MaterialTheme.typography.labelMedium,
+            style = MaterialTheme.typography.labelSmall,
             fontWeight = FontWeight.Bold,
+            textAlign = TextAlign.Center,
         )
         Text(
-            "🪙${crop.coinCost} → 🪙${crop.sellPrice}",
-            style = MaterialTheme.typography.labelSmall,
+            "🪙${prettyCoins(crop.coinCost)}→${prettyCoins(crop.sellPrice)} ⚡${crop.plantEnergy}",
+            fontSize = 9.sp,
             color = MaterialTheme.colorScheme.onSurfaceVariant,
-        )
-        Text(
-            "⚡${crop.plantEnergy} · ${prettyTime(crop.growthMs)}",
-            style = MaterialTheme.typography.labelSmall,
-            color = MaterialTheme.colorScheme.onSurfaceVariant,
+            textAlign = TextAlign.Center,
         )
     }
 }
@@ -537,6 +539,8 @@ private fun UpgradesRow(s: FarmState, costFn: (Upgrade) -> Int, onBuy: (Upgrade)
         }
     }
 }
+
+private fun prettyCoins(n: Int): String = if (n >= 1000) "${n / 1000}k" else "$n"
 
 private fun prettyTime(ms: Long): String {
     val s = ms / 1000
