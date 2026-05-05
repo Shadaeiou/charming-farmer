@@ -117,9 +117,11 @@ fun HomeScreen(onOpenSettings: () -> Unit) {
             FeedbackText(game.feedback, game.feedbackBad)
             Spacer(Modifier.height(4.dp))
             FarmGrid(state, nowMs, modifier = Modifier.weight(1f), onPlotClick = { game.clickPlot(it) })
-            Spacer(Modifier.height(8.dp))
-            SeedShelf(state, onSelectSeed = { game.selectSeed(it) }, onSelectTree = { game.selectTree(it) })
-            Spacer(Modifier.height(8.dp))
+            Spacer(Modifier.height(6.dp))
+            SeedShelf(state, onSelect = { game.selectSeed(it) })
+            Spacer(Modifier.height(4.dp))
+            TreeNursery(state, onSelect = { game.selectTree(it) })
+            Spacer(Modifier.height(6.dp))
             UpgradesRow(state, costFn = game::upgradeCost, onBuy = { game.buyUpgrade(it) })
             Spacer(Modifier.height(4.dp))
         }
@@ -350,22 +352,12 @@ private fun PlotCell(plot: Plot, nowMs: Long, modifier: Modifier, onClick: () ->
 }
 
 @Composable
-private fun SeedShelf(
-    state: FarmState,
-    onSelectSeed: (CropType) -> Unit,
-    onSelectTree: (TreeType) -> Unit,
-) {
+private fun SeedShelf(state: FarmState, onSelect: (CropType) -> Unit) {
     Column {
-        Text(
-            "🌱 Seeds  🌳 Trees",
-            style = MaterialTheme.typography.titleMedium,
-            fontWeight = FontWeight.Bold,
-        )
-        Spacer(Modifier.height(6.dp))
+        Text("🌱 Seeds", style = MaterialTheme.typography.titleSmall, fontWeight = FontWeight.Bold)
+        Spacer(Modifier.height(4.dp))
         Row(
-            modifier = Modifier
-                .fillMaxWidth()
-                .horizontalScroll(rememberScrollState()),
+            modifier = Modifier.fillMaxWidth().horizontalScroll(rememberScrollState()),
             horizontalArrangement = Arrangement.spacedBy(6.dp),
         ) {
             for (c in CropType.entries) {
@@ -373,21 +365,28 @@ private fun SeedShelf(
                     crop = c,
                     selected = state.selectedTree == null && c == state.selectedSeed,
                     modifier = Modifier.width(80.dp),
-                    onClick = { onSelectSeed(c) },
+                    onClick = { onSelect(c) },
                 )
             }
-            Box(
-                Modifier
-                    .width(1.dp)
-                    .fillMaxHeight()
-                    .background(MaterialTheme.colorScheme.outlineVariant)
-            )
+        }
+    }
+}
+
+@Composable
+private fun TreeNursery(state: FarmState, onSelect: (TreeType) -> Unit) {
+    Column {
+        Text("🌳 Trees", style = MaterialTheme.typography.titleSmall, fontWeight = FontWeight.Bold)
+        Spacer(Modifier.height(4.dp))
+        Row(
+            modifier = Modifier.fillMaxWidth().horizontalScroll(rememberScrollState()),
+            horizontalArrangement = Arrangement.spacedBy(6.dp),
+        ) {
             for (t in TreeType.entries) {
                 TreeButton(
                     tree = t,
                     selected = t == state.selectedTree,
                     modifier = Modifier.width(88.dp),
-                    onClick = { onSelectTree(t) },
+                    onClick = { onSelect(t) },
                 )
             }
         }
