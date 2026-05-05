@@ -142,6 +142,7 @@ data class FarmState(
         "growthSpeed" to 0, "sellBonus" to 0, "waterBonus" to 0,
     ),
     val plots: List<Plot> = List(PLOT_COUNT) { Plot() },
+    val birdsSeen: Map<String, Int> = emptyMap(),
 )
 
 class FarmGame(context: Context) {
@@ -369,6 +370,12 @@ class FarmGame(context: Context) {
         save()
     }
 
+    fun recordBird(name: String) {
+        val current = state.birdsSeen[name] ?: 0
+        state = state.copy(birdsSeen = state.birdsSeen + (name to current + 1))
+        save()
+    }
+
     private fun note(msg: String) { feedback = msg; feedbackBad = false }
     private fun fail(msg: String) { feedback = msg; feedbackBad = true }
 
@@ -401,6 +408,8 @@ class FarmGame(context: Context) {
         }
         val upJson = JSONObject()
         for ((k, v) in s.upgradeLevels) upJson.put(k, v)
+        val birdsJson = JSONObject()
+        for ((k, v) in s.birdsSeen) birdsJson.put(k, v)
         val json = JSONObject()
             .put("energy", s.energy.toDouble())
             .put("maxEnergy", s.maxEnergy)
@@ -411,6 +420,7 @@ class FarmGame(context: Context) {
             .put("selectedSeed", s.selectedSeed.name)
             .put("upgrades", upJson)
             .put("plots", plotsJson)
+            .put("birdsSeen", birdsJson)
         if (s.selectedTree != null) json.put("selectedTree", s.selectedTree.name)
         prefs.edit().putString("state", json.toString()).apply()
     }
@@ -456,6 +466,14 @@ class FarmGame(context: Context) {
             if (!upMap.containsKey("growthSpeed")) upMap["growthSpeed"] = 0
             if (!upMap.containsKey("sellBonus")) upMap["sellBonus"] = 0
             if (!upMap.containsKey("waterBonus")) upMap["waterBonus"] = 0
+            val birdsMap = mutableMapOf<String, Int>()
+            o.optJSONObject("birdsSeen")?.let { obj ->
+                val keys = obj.keys()
+                while (keys.hasNext()) {
+                    val k = keys.next()
+                    birdsMap[k] = obj.optInt(k, 0)
+                }
+            }
             FarmState(
                 energy = o.optDouble("energy", STARTING_ENERGY.toDouble()).toFloat(),
                 maxEnergy = o.optInt("maxEnergy", STARTING_ENERGY),
@@ -469,6 +487,7 @@ class FarmGame(context: Context) {
                     ?.let { runCatching { TreeType.valueOf(it) }.getOrNull() },
                 upgradeLevels = upMap,
                 plots = if (plots.size == PLOT_COUNT) plots else List(PLOT_COUNT) { Plot() },
+                birdsSeen = birdsMap,
             )
         }.getOrElse { FarmState(lastTickMs = System.currentTimeMillis()) }
     }

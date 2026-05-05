@@ -22,6 +22,7 @@ import androidx.navigation.compose.composable
 import androidx.navigation.compose.rememberNavController
 import com.shadaeiou.charmingfarmer.data.DownloadResult
 import com.shadaeiou.charmingfarmer.data.Updater
+import com.shadaeiou.charmingfarmer.ui.BirdwatchingScreen
 import com.shadaeiou.charmingfarmer.ui.FarmerTheme
 import com.shadaeiou.charmingfarmer.ui.FishingScreen
 import com.shadaeiou.charmingfarmer.ui.HomeScreen
@@ -165,12 +166,23 @@ private fun Root() {
                     saveLastDest("pond")
                     nav.navigate("pond") { popUpTo("map") { inclusive = true } }
                 },
+                onGoToBirds = {
+                    saveLastDest("birds")
+                    nav.navigate("birds") { popUpTo("map") { inclusive = true } }
+                },
                 onClose = { nav.popBackStack() },
             )
         }
         composable("pond") {
             saveLastDest("pond")
             FishingScreen(
+                onBack = { nav.popBackStack() },
+                onOpenMap = { nav.navigate("map") },
+            )
+        }
+        composable("birds") {
+            saveLastDest("birds")
+            BirdwatchingScreen(
                 onBack = { nav.popBackStack() },
                 onOpenMap = { nav.navigate("map") },
             )

@@ -8,6 +8,16 @@ data class ReleaseNote(
 
 val CHANGELOG: List<ReleaseNote> = listOf(
     ReleaseNote(
+        version = "0.1.23",
+        date = "2026-05-05",
+        bullets = listOf(
+            "New atlas destination: 🦜 Birdwatching. Tap birds as they fly across the sky (⚡1 each); rarer ones pay way more",
+            "Nine birds from sparrow (🪙5) to peacock (🪙2,500); your field-notes count persists across sessions",
+            "Atlas overhauled with full descriptions on every tile and now scrolls — fifteen destinations in total",
+            "Future plans visible at a glance: Forest, Cellar, Workshop, Greenhouse, Cottage, Shrine, Café joined the roadmap",
+        ),
+    ),
+    ReleaseNote(
         version = "0.1.22",
         date = "2026-05-05",
         bullets = listOf(
