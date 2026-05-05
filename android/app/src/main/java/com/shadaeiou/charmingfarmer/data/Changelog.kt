@@ -8,6 +8,13 @@ data class ReleaseNote(
 
 val CHANGELOG: List<ReleaseNote> = listOf(
     ReleaseNote(
+        version = "0.1.16",
+        date = "2026-05-05",
+        bullets = listOf(
+            "Upgrades rebalanced — early levels still affordable, but each level costs 3–3.5× the last, making mid and late levels a real goal to save toward",
+        ),
+    ),
+    ReleaseNote(
         version = "0.1.14",
         date = "2026-05-05",
         bullets = listOf(

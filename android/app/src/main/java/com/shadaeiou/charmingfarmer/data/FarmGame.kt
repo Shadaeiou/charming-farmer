@@ -113,11 +113,11 @@ data class Upgrade(
 )
 
 val UPGRADES = listOf(
-    Upgrade("maxEnergy", "Bigger Lungs", "+10 max energy", 80, 2.0),
-    Upgrade("regen", "Strong Coffee", "−15% regen time", 120, 2.2),
-    Upgrade("growthSpeed", "Fertilizer", "+15% grow speed", 160, 2.3),
-    Upgrade("sellBonus", "Market Stall", "+2 sell coins", 140, 2.2),
-    Upgrade("waterBonus", "Garden Hose", "+5% water bonus", 100, 2.1),
+    Upgrade("maxEnergy", "Bigger Lungs", "+10 max energy", 500, 3.0),
+    Upgrade("regen", "Strong Coffee", "−15% regen time", 800, 3.2),
+    Upgrade("growthSpeed", "Fertilizer", "+15% grow speed", 1_000, 3.5),
+    Upgrade("sellBonus", "Market Stall", "+2 sell coins", 600, 3.0),
+    Upgrade("waterBonus", "Garden Hose", "+5% water bonus", 450, 2.9),
 )
 
 const val ENERGY_TILL = 3
