@@ -302,13 +302,11 @@ private fun PlotCell(plot: Plot, nowMs: Long, modifier: Modifier, onClick: () ->
                         fontSize = 26.sp,
                         modifier = Modifier.scale(bounceScale),
                     )
-                    if (treeReady) {
-                        Text(
-                            tree.treeEmoji,
-                            fontSize = 11.sp,
-                            modifier = Modifier.align(Alignment.TopStart).padding(2.dp),
-                        )
-                    }
+                    Text(
+                        if (treeReady) tree.treeEmoji else tree.fruitEmoji,
+                        fontSize = 11.sp,
+                        modifier = Modifier.align(Alignment.TopStart).padding(2.dp),
+                    )
                     Text(
                         "${plot.harvestCount}/${tree.maxHarvests}",
                         fontSize = 9.sp,
