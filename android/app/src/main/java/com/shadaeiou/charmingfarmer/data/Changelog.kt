@@ -8,6 +8,13 @@ data class ReleaseNote(
 
 val CHANGELOG: List<ReleaseNote> = listOf(
     ReleaseNote(
+        version = "0.2.1",
+        date = "2026-05-05",
+        bullets = listOf(
+            "Asks for notification permission on first launch — without it, Android 13+ silently dropped every update prompt",
+        ),
+    ),
+    ReleaseNote(
         version = "0.2.0",
         date = "2026-05-05",
         bullets = listOf(
