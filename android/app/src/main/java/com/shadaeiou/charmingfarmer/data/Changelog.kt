@@ -8,6 +8,13 @@ data class ReleaseNote(
 
 val CHANGELOG: List<ReleaseNote> = listOf(
     ReleaseNote(
+        version = "0.1.14",
+        date = "2026-05-05",
+        bullets = listOf(
+            "Small crop icon now sits in the top-left of every planted plot, so you can tell carrots from corn while they're still seedlings",
+        ),
+    ),
+    ReleaseNote(
         version = "0.1.13",
         date = "2026-05-05",
         bullets = listOf(
@@ -20,7 +27,7 @@ val CHANGELOG: List<ReleaseNote> = listOf(
         ),
     ),
     ReleaseNote(
-        version = "0.3.0",
+        version = "0.1.11",
         date = "2026-05-05",
         bullets = listOf(
             "Crops now exponentially expensive — Truffle tops at 54,000 coins",

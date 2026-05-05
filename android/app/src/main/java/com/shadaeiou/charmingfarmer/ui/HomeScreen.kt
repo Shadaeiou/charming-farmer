@@ -332,6 +332,13 @@ private fun PlotCell(plot: Plot, nowMs: Long, modifier: Modifier, onClick: () ->
                 if (content.isNotEmpty()) {
                     Text(text = content, fontSize = 30.sp, modifier = Modifier.scale(bounceScale))
                 }
+                if (frac < 1f && plot.crop != null) {
+                    Text(
+                        plot.crop.emoji,
+                        fontSize = 11.sp,
+                        modifier = Modifier.align(Alignment.TopStart).padding(2.dp),
+                    )
+                }
                 if (plot.watered && frac < 1f) {
                     Text("💧", fontSize = 11.sp,
                         modifier = Modifier.align(Alignment.TopEnd).padding(2.dp))
