@@ -1,6 +1,7 @@
 package com.shadaeiou.charmingfarmer
 
 import android.Manifest
+import android.annotation.SuppressLint
 import android.content.Intent
 import android.content.pm.PackageManager
 import android.os.Build
@@ -30,6 +31,10 @@ import kotlinx.coroutines.withContext
 
 class MainActivity : ComponentActivity() {
 
+    // Lint flags this on FragmentActivity hosts that pre-date fragment 1.3.0; we
+    // extend ComponentActivity directly and never use Fragments, so the bug it
+    // warns about can't apply here.
+    @SuppressLint("InvalidFragmentVersionForActivityResult")
     private val notificationPermissionLauncher =
         registerForActivityResult(ActivityResultContracts.RequestPermission()) { /* result ignored */ }
 
