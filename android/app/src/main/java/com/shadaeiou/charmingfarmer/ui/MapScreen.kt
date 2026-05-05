@@ -100,6 +100,25 @@ fun MapScreen(onGoToFarm: () -> Unit, onGoToPond: () -> Unit, onClose: () -> Uni
                     horizontalArrangement = Arrangement.spacedBy(16.dp),
                 ) {
                     LocationCard(
+                        emoji = "🐝",
+                        name = "Apiary",
+                        unlocked = false,
+                        modifier = Modifier.weight(1f),
+                        onClick = { Toast.makeText(context, "Coming soon!", Toast.LENGTH_SHORT).show() },
+                    )
+                    LocationCard(
+                        emoji = "🐄",
+                        name = "Livestock",
+                        unlocked = false,
+                        modifier = Modifier.weight(1f),
+                        onClick = { Toast.makeText(context, "Coming soon!", Toast.LENGTH_SHORT).show() },
+                    )
+                }
+                Row(
+                    modifier = Modifier.fillMaxWidth(),
+                    horizontalArrangement = Arrangement.spacedBy(16.dp),
+                ) {
+                    LocationCard(
                         emoji = "⛏️",
                         name = "Mine",
                         unlocked = false,

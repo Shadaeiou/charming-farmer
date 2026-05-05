@@ -8,6 +8,13 @@ data class ReleaseNote(
 
 val CHANGELOG: List<ReleaseNote> = listOf(
     ReleaseNote(
+        version = "0.1.22",
+        date = "2026-05-05",
+        bullets = listOf(
+            "Two more atlas placeholders: 🐝 Apiary and 🐄 Livestock — coming soon, but visible on the map so you know what's on the roadmap",
+        ),
+    ),
+    ReleaseNote(
         version = "0.1.21",
         date = "2026-05-05",
         bullets = listOf(
