@@ -8,9 +8,10 @@ import androidx.compose.animation.core.rememberInfiniteTransition
 import androidx.compose.animation.core.tween
 import androidx.compose.foundation.background
 import androidx.compose.foundation.border
-import androidx.compose.foundation.ExperimentalFoundationApi
 import androidx.compose.foundation.clickable
-import androidx.compose.foundation.combinedClickable
+import androidx.compose.foundation.gestures.awaitEachGesture
+import androidx.compose.foundation.gestures.awaitFirstDown
+import androidx.compose.foundation.gestures.waitForUpOrCancellation
 import androidx.compose.foundation.horizontalScroll
 import androidx.compose.foundation.layout.Arrangement
 import androidx.compose.foundation.layout.Box
@@ -28,7 +29,6 @@ import androidx.compose.foundation.layout.size
 import androidx.compose.foundation.layout.width
 import androidx.compose.foundation.rememberScrollState
 import androidx.compose.foundation.shape.RoundedCornerShape
-import androidx.compose.ui.draw.alpha
 import androidx.compose.material.icons.Icons
 import androidx.compose.material.icons.filled.Map
 import androidx.compose.material.icons.filled.Settings
@@ -39,11 +39,8 @@ import androidx.compose.material3.Icon
 import androidx.compose.material3.IconButton
 import androidx.compose.material3.LinearProgressIndicator
 import androidx.compose.material3.MaterialTheme
-import androidx.compose.material3.AlertDialog
-import androidx.compose.material3.HorizontalDivider
 import androidx.compose.material3.Scaffold
 import androidx.compose.material3.Text
-import androidx.compose.material3.TextButton
 import androidx.compose.material3.TopAppBar
 import androidx.compose.material3.TopAppBarDefaults
 import androidx.compose.runtime.Composable
@@ -56,14 +53,23 @@ import androidx.compose.runtime.remember
 import androidx.compose.runtime.setValue
 import androidx.compose.ui.Alignment
 import androidx.compose.ui.Modifier
+import androidx.compose.ui.draw.alpha
 import androidx.compose.ui.draw.clip
 import androidx.compose.ui.draw.scale
 import androidx.compose.ui.graphics.Color
+import androidx.compose.ui.input.pointer.pointerInput
 import androidx.compose.ui.platform.LocalContext
+import androidx.compose.ui.platform.LocalDensity
 import androidx.compose.ui.text.font.FontWeight
 import androidx.compose.ui.text.style.TextAlign
+import androidx.compose.ui.unit.IntOffset
+import androidx.compose.ui.unit.IntRect
+import androidx.compose.ui.unit.IntSize
+import androidx.compose.ui.unit.LayoutDirection
 import androidx.compose.ui.unit.dp
 import androidx.compose.ui.unit.sp
+import androidx.compose.ui.window.Popup
+import androidx.compose.ui.window.PopupPositionProvider
 import com.shadaeiou.charmingfarmer.data.CropType
 import com.shadaeiou.charmingfarmer.data.FarmGame
 import com.shadaeiou.charmingfarmer.data.FarmState
@@ -73,6 +79,7 @@ import com.shadaeiou.charmingfarmer.data.TreeType
 import com.shadaeiou.charmingfarmer.data.UPGRADES
 import com.shadaeiou.charmingfarmer.data.Upgrade
 import kotlinx.coroutines.delay
+import kotlinx.coroutines.withTimeoutOrNull
 
 private val SoilColor = Color(0xFF8B5A3C)
 private val SoilDarkColor = Color(0xFF4A2D18)
@@ -373,8 +380,6 @@ private fun PlotCell(plot: Plot, nowMs: Long, modifier: Modifier, onClick: () ->
 
 @Composable
 private fun SeedShelf(state: FarmState, onSelect: (CropType) -> Unit) {
-    var infoSeed by remember { mutableStateOf<CropType?>(null) }
-    infoSeed?.let { CropInfoDialog(crop = it, onDismiss = { infoSeed = null }) }
     Column {
         Text("🌱 Seeds", style = MaterialTheme.typography.titleSmall, fontWeight = FontWeight.Bold)
         Spacer(Modifier.height(4.dp))
@@ -389,7 +394,6 @@ private fun SeedShelf(state: FarmState, onSelect: (CropType) -> Unit) {
                     coins = state.coins,
                     modifier = Modifier.width(80.dp),
                     onClick = { onSelect(c) },
-                    onLongClick = { infoSeed = c },
                 )
             }
         }
@@ -398,8 +402,6 @@ private fun SeedShelf(state: FarmState, onSelect: (CropType) -> Unit) {
 
 @Composable
 private fun TreeNursery(state: FarmState, onSelect: (TreeType) -> Unit) {
-    var infoTree by remember { mutableStateOf<TreeType?>(null) }
-    infoTree?.let { TreeInfoDialog(tree = it, onDismiss = { infoTree = null }) }
     Column {
         Text("🌳 Trees", style = MaterialTheme.typography.titleSmall, fontWeight = FontWeight.Bold)
         Spacer(Modifier.height(4.dp))
@@ -414,48 +416,68 @@ private fun TreeNursery(state: FarmState, onSelect: (TreeType) -> Unit) {
                     coins = state.coins,
                     modifier = Modifier.width(88.dp),
                     onClick = { onSelect(t) },
-                    onLongClick = { infoTree = t },
                 )
             }
         }
     }
 }
 
-@OptIn(ExperimentalFoundationApi::class)
 @Composable
-private fun TreeButton(tree: TreeType, selected: Boolean, coins: Int, modifier: Modifier, onClick: () -> Unit, onLongClick: () -> Unit) {
+private fun TreeButton(tree: TreeType, selected: Boolean, coins: Int, modifier: Modifier, onClick: () -> Unit) {
     val canAfford = coins >= tree.coinCost
+    var showTooltip by remember { mutableStateOf(false) }
+    val revenuePerMin = tree.maxHarvests * tree.sellPrice * 60_000.0 / tree.lifeMs
     val borderColor = if (selected) MaterialTheme.colorScheme.tertiary
         else MaterialTheme.colorScheme.outline.copy(alpha = 0.4f)
     val bg = if (selected) MaterialTheme.colorScheme.tertiaryContainer
         else MaterialTheme.colorScheme.surface
-    Column(
-        modifier = modifier
-            .alpha(if (canAfford) 1f else 0.38f)
-            .clip(RoundedCornerShape(10.dp))
-            .background(bg)
-            .border(if (selected) 3.dp else 2.dp, borderColor, RoundedCornerShape(10.dp))
-            .combinedClickable(onClick = onClick, onLongClick = onLongClick)
-            .padding(vertical = 4.dp, horizontal = 4.dp),
-        horizontalAlignment = Alignment.CenterHorizontally,
-    ) {
-        Text("${tree.treeEmoji}${tree.fruitEmoji}", fontSize = 18.sp)
-        Text(
-            tree.displayName,
-            style = MaterialTheme.typography.labelSmall,
-            fontWeight = FontWeight.Bold,
-            textAlign = TextAlign.Center,
-        )
-        Text(
-            "🪙${prettyCoins(tree.coinCost)}·${tree.maxHarvests}×${prettyCoins(tree.sellPrice)}·${prettyTime(tree.lifeMs)}",
-            fontSize = 9.sp,
-            color = MaterialTheme.colorScheme.onSurfaceVariant,
-            textAlign = TextAlign.Center,
-        )
+
+    Box(modifier = modifier) {
+        Column(
+            modifier = Modifier
+                .fillMaxWidth()
+                .alpha(if (canAfford) 1f else 0.38f)
+                .clip(RoundedCornerShape(10.dp))
+                .background(bg)
+                .border(if (selected) 3.dp else 2.dp, borderColor, RoundedCornerShape(10.dp))
+                .pointerInput(Unit) {
+                    awaitEachGesture {
+                        awaitFirstDown(requireUnconsumed = false)
+                        val upBeforeTimeout = withTimeoutOrNull(viewConfiguration.longPressTimeoutMillis) {
+                            waitForUpOrCancellation()
+                        }
+                        if (upBeforeTimeout != null) {
+                            onClick()
+                        } else {
+                            showTooltip = true
+                            waitForUpOrCancellation()
+                            showTooltip = false
+                        }
+                    }
+                }
+                .padding(vertical = 4.dp, horizontal = 4.dp),
+            horizontalAlignment = Alignment.CenterHorizontally,
+        ) {
+            Text("${tree.treeEmoji}${tree.fruitEmoji}", fontSize = 18.sp)
+            Text(
+                tree.displayName,
+                style = MaterialTheme.typography.labelSmall,
+                fontWeight = FontWeight.Bold,
+                textAlign = TextAlign.Center,
+            )
+            Text(
+                "🪙${prettyCoins(tree.coinCost)}·${tree.maxHarvests}×${prettyCoins(tree.sellPrice)}·${prettyTime(tree.lifeMs)}",
+                fontSize = 9.sp,
+                color = MaterialTheme.colorScheme.onSurfaceVariant,
+                textAlign = TextAlign.Center,
+            )
+        }
+        if (showTooltip) {
+            AboveAnchorTooltip("${"%.1f".format(revenuePerMin)} coins/min")
+        }
     }
 }
 
-@OptIn(ExperimentalFoundationApi::class)
 @Composable
 private fun SeedButton(
     crop: CropType,
@@ -463,36 +485,94 @@ private fun SeedButton(
     coins: Int,
     modifier: Modifier,
     onClick: () -> Unit,
-    onLongClick: () -> Unit,
 ) {
     val canAfford = coins >= crop.coinCost
+    var showTooltip by remember { mutableStateOf(false) }
+    val revenuePerMin = crop.sellPrice * 60_000.0 / crop.growthMs
     val borderColor = if (selected) MaterialTheme.colorScheme.secondary
         else MaterialTheme.colorScheme.outline.copy(alpha = 0.4f)
     val bg = if (selected) MaterialTheme.colorScheme.secondaryContainer
         else MaterialTheme.colorScheme.surface
-    Column(
-        modifier = modifier
-            .alpha(if (canAfford) 1f else 0.38f)
-            .clip(RoundedCornerShape(10.dp))
-            .background(bg)
-            .border(if (selected) 3.dp else 2.dp, borderColor, RoundedCornerShape(10.dp))
-            .combinedClickable(onClick = onClick, onLongClick = onLongClick)
-            .padding(vertical = 4.dp, horizontal = 4.dp),
-        horizontalAlignment = Alignment.CenterHorizontally,
+
+    Box(modifier = modifier) {
+        Column(
+            modifier = Modifier
+                .fillMaxWidth()
+                .alpha(if (canAfford) 1f else 0.38f)
+                .clip(RoundedCornerShape(10.dp))
+                .background(bg)
+                .border(if (selected) 3.dp else 2.dp, borderColor, RoundedCornerShape(10.dp))
+                .pointerInput(Unit) {
+                    awaitEachGesture {
+                        awaitFirstDown(requireUnconsumed = false)
+                        val upBeforeTimeout = withTimeoutOrNull(viewConfiguration.longPressTimeoutMillis) {
+                            waitForUpOrCancellation()
+                        }
+                        if (upBeforeTimeout != null) {
+                            onClick()
+                        } else {
+                            showTooltip = true
+                            waitForUpOrCancellation()
+                            showTooltip = false
+                        }
+                    }
+                }
+                .padding(vertical = 4.dp, horizontal = 4.dp),
+            horizontalAlignment = Alignment.CenterHorizontally,
+        ) {
+            Text(crop.emoji, fontSize = 22.sp)
+            Text(
+                crop.displayName,
+                style = MaterialTheme.typography.labelSmall,
+                fontWeight = FontWeight.Bold,
+                textAlign = TextAlign.Center,
+            )
+            Text(
+                "🪙${prettyCoins(crop.coinCost)}→${prettyCoins(crop.sellPrice)} ⚡${crop.plantEnergy}",
+                fontSize = 9.sp,
+                color = MaterialTheme.colorScheme.onSurfaceVariant,
+                textAlign = TextAlign.Center,
+            )
+        }
+        if (showTooltip) {
+            AboveAnchorTooltip("${"%.1f".format(revenuePerMin)} coins/min")
+        }
+    }
+}
+
+@Composable
+private fun AboveAnchorTooltip(text: String) {
+    val density = LocalDensity.current
+    Popup(
+        popupPositionProvider = object : PopupPositionProvider {
+            override fun calculatePosition(
+                anchorBounds: IntRect,
+                windowSize: IntSize,
+                layoutDirection: LayoutDirection,
+                popupContentSize: IntSize,
+            ): IntOffset {
+                val x = anchorBounds.left + (anchorBounds.width - popupContentSize.width) / 2
+                val y = anchorBounds.top - popupContentSize.height - with(density) { 8.dp.roundToPx() }
+                return IntOffset(
+                    x.coerceIn(0, (windowSize.width - popupContentSize.width).coerceAtLeast(0)),
+                    y.coerceAtLeast(0),
+                )
+            }
+        },
     ) {
-        Text(crop.emoji, fontSize = 22.sp)
-        Text(
-            crop.displayName,
-            style = MaterialTheme.typography.labelSmall,
-            fontWeight = FontWeight.Bold,
-            textAlign = TextAlign.Center,
-        )
-        Text(
-            "🪙${prettyCoins(crop.coinCost)}→${prettyCoins(crop.sellPrice)} ⚡${crop.plantEnergy}",
-            fontSize = 9.sp,
-            color = MaterialTheme.colorScheme.onSurfaceVariant,
-            textAlign = TextAlign.Center,
-        )
+        Card(
+            elevation = CardDefaults.cardElevation(8.dp),
+            colors = CardDefaults.cardColors(containerColor = MaterialTheme.colorScheme.inverseSurface),
+            shape = RoundedCornerShape(8.dp),
+        ) {
+            Text(
+                text,
+                modifier = Modifier.padding(horizontal = 10.dp, vertical = 6.dp),
+                style = MaterialTheme.typography.labelLarge,
+                fontWeight = FontWeight.Bold,
+                color = MaterialTheme.colorScheme.inverseOnSurface,
+            )
+        }
     }
 }
 
@@ -560,74 +640,6 @@ private fun UpgradesRow(s: FarmState, costFn: (Upgrade) -> Int, onBuy: (Upgrade)
             }
         }
     }
-}
-
-@Composable
-private fun CropInfoDialog(crop: CropType, onDismiss: () -> Unit) {
-    val revenuePerMin = crop.sellPrice * 60_000.0 / crop.growthMs
-    val profitPerMin = (crop.sellPrice - crop.coinCost) * 60_000.0 / crop.growthMs
-    AlertDialog(
-        onDismissRequest = onDismiss,
-        title = { Text("${crop.emoji} ${crop.displayName}") },
-        text = {
-            Column(verticalArrangement = Arrangement.spacedBy(4.dp)) {
-                Text("Grow time: ${prettyTime(crop.growthMs)}", style = MaterialTheme.typography.bodyMedium)
-                Text(
-                    "Seed 🪙${crop.coinCost}  ·  Sell 🪙${crop.sellPrice}  ·  Profit +🪙${crop.sellPrice - crop.coinCost}",
-                    style = MaterialTheme.typography.bodyMedium,
-                )
-                HorizontalDivider(modifier = Modifier.padding(vertical = 4.dp))
-                Text(
-                    "${"%.1f".format(revenuePerMin)} coins / min",
-                    style = MaterialTheme.typography.titleMedium,
-                    fontWeight = FontWeight.Bold,
-                    color = MaterialTheme.colorScheme.primary,
-                )
-                Text(
-                    "${"%.1f".format(profitPerMin)} profit / min after seed cost",
-                    style = MaterialTheme.typography.bodySmall,
-                    color = MaterialTheme.colorScheme.onSurfaceVariant,
-                )
-            }
-        },
-        confirmButton = { TextButton(onClick = onDismiss) { Text("OK") } },
-    )
-}
-
-@Composable
-private fun TreeInfoDialog(tree: TreeType, onDismiss: () -> Unit) {
-    val totalEarnings = tree.maxHarvests * tree.sellPrice
-    val revenuePerMin = totalEarnings * 60_000.0 / tree.lifeMs
-    val profitPerMin = (totalEarnings - tree.coinCost) * 60_000.0 / tree.lifeMs
-    AlertDialog(
-        onDismissRequest = onDismiss,
-        title = { Text("${tree.treeEmoji} ${tree.displayName}") },
-        text = {
-            Column(verticalArrangement = Arrangement.spacedBy(4.dp)) {
-                Text(
-                    "Life ${prettyTime(tree.lifeMs)}  ·  Harvest every ${prettyTime(tree.harvestIntervalMs)}",
-                    style = MaterialTheme.typography.bodyMedium,
-                )
-                Text(
-                    "Plant 🪙${prettyCoins(tree.coinCost)}  ·  ${tree.maxHarvests}× 🪙${prettyCoins(tree.sellPrice)} = 🪙${prettyCoins(totalEarnings)}",
-                    style = MaterialTheme.typography.bodyMedium,
-                )
-                HorizontalDivider(modifier = Modifier.padding(vertical = 4.dp))
-                Text(
-                    "${"%.1f".format(revenuePerMin)} coins / min",
-                    style = MaterialTheme.typography.titleMedium,
-                    fontWeight = FontWeight.Bold,
-                    color = MaterialTheme.colorScheme.tertiary,
-                )
-                Text(
-                    "${"%.1f".format(profitPerMin)} profit / min after planting cost",
-                    style = MaterialTheme.typography.bodySmall,
-                    color = MaterialTheme.colorScheme.onSurfaceVariant,
-                )
-            }
-        },
-        confirmButton = { TextButton(onClick = onDismiss) { Text("OK") } },
-    )
 }
 
 private fun prettyCoins(n: Int): String = if (n >= 1000) "${n / 1000}k" else "$n"

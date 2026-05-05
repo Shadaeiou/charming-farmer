@@ -8,6 +8,13 @@ data class ReleaseNote(
 
 val CHANGELOG: List<ReleaseNote> = listOf(
     ReleaseNote(
+        version = "0.1.18",
+        date = "2026-05-05",
+        bullets = listOf(
+            "Hold any seed or tree button to see a coins-per-minute tooltip above it; release to dismiss",
+        ),
+    ),
+    ReleaseNote(
         version = "0.1.17",
         date = "2026-05-05",
         bullets = listOf(
