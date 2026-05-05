@@ -8,14 +8,14 @@ data class ReleaseNote(
 
 val CHANGELOG: List<ReleaseNote> = listOf(
     ReleaseNote(
-        version = "0.2.1",
+        version = "0.1.9",
         date = "2026-05-05",
         bullets = listOf(
             "Asks for notification permission on first launch — without it, Android 13+ silently dropped every update prompt",
         ),
     ),
     ReleaseNote(
-        version = "0.2.0",
+        version = "0.1.6",
         date = "2026-05-05",
         bullets = listOf(
             "30 new crops — fruits, veggies, and nuts from carrot to coconut",
@@ -27,7 +27,7 @@ val CHANGELOG: List<ReleaseNote> = listOf(
         ),
     ),
     ReleaseNote(
-        version = "0.1.0",
+        version = "0.1.2",
         date = "2026-05-04",
         bullets = listOf(
             "Initial harvest: 4x4 farm with energy-driven actions",
