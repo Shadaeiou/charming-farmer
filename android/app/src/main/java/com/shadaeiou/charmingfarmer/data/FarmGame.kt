@@ -18,49 +18,62 @@ enum class CropType(
     val plantEnergy: Int,
 ) {
     CARROT("Carrot", "🥕", "🌱", 3, 20_000L, 8, 2),
-    POTATO("Potato", "🥔", "🌱", 4, 25_000L, 11, 2),
-    LETTUCE("Lettuce", "🥬", "🌱", 5, 30_000L, 13, 2),
-    ONION("Onion", "🧅", "🌱", 6, 35_000L, 17, 2),
-    WHEAT("Wheat", "🌾", "🌱", 8, 60_000L, 22, 3),
-    CORN("Corn", "🌽", "🌱", 9, 65_000L, 25, 3),
-    BEAN("Bean", "🫘", "🌱", 10, 70_000L, 28, 3),
-    STRAWBERRY("Strawberry", "🍓", "🌱", 11, 80_000L, 32, 3),
-    MUSHROOM("Mushroom", "🍄", "🌱", 13, 85_000L, 37, 3),
-    APPLE("Apple", "🍎", "🌿", 15, 100_000L, 44, 3),
-    BROCCOLI("Broccoli", "🥦", "🌱", 16, 105_000L, 47, 3),
-    ZUCCHINI("Zucchini", "🥒", "🌱", 17, 110_000L, 50, 4),
-    TOMATO("Tomato", "🍅", "🌿", 18, 120_000L, 55, 4),
-    CHERRY("Cherry", "🍒", "🌿", 20, 130_000L, 58, 4),
-    BLUEBERRY("Blueberry", "🫐", "🌱", 22, 140_000L, 65, 4),
-    PEACH("Peach", "🍑", "🌿", 24, 155_000L, 70, 4),
-    BANANA("Banana", "🍌", "🌿", 26, 165_000L, 77, 4),
-    ORANGE("Orange", "🍊", "🌿", 28, 175_000L, 83, 4),
-    PEAR("Pear", "🍐", "🌿", 32, 200_000L, 95, 5),
-    GRAPE("Grape", "🍇", "🌱", 36, 220_000L, 108, 5),
-    PEPPER("Pepper", "🫑", "🌿", 38, 235_000L, 114, 5),
-    PUMPKIN("Pumpkin", "🎃", "🌿", 40, 300_000L, 140, 6),
-    LEMON("Lemon", "🍋", "🌿", 42, 260_000L, 125, 5),
-    AVOCADO("Avocado", "🥑", "🌿", 48, 295_000L, 143, 6),
-    KIWI("Kiwi", "🥝", "🌱", 55, 330_000L, 164, 6),
-    PEANUT("Peanut", "🥜", "🌱", 65, 400_000L, 195, 6),
-    GARLIC("Garlic", "🧄", "🌱", 70, 430_000L, 210, 7),
-    HOT_PEPPER("Hot Pepper", "🌶️", "🌿", 80, 490_000L, 240, 7),
-    CHESTNUT("Chestnut", "🌰", "🌿", 90, 550_000L, 270, 7),
-    MANGO("Mango", "🥭", "🌿", 100, 600_000L, 300, 8),
-    OLIVE("Olive", "🫒", "🌿", 120, 720_000L, 360, 8),
-    PINEAPPLE("Pineapple", "🍍", "🌿", 140, 840_000L, 420, 9),
-    WATERMELON("Watermelon", "🍉", "🌿", 160, 960_000L, 480, 9),
-    COCONUT("Coconut", "🥥", "🌿", 200, 1_200_000L, 600, 10),
+    POTATO("Potato", "🥔", "🌱", 5, 25_000L, 13, 2),
+    LETTUCE("Lettuce", "🥬", "🌱", 8, 35_000L, 21, 2),
+    ONION("Onion", "🧅", "🌱", 12, 50_000L, 32, 2),
+    WHEAT("Wheat", "🌾", "🌱", 17, 65_000L, 45, 3),
+    CORN("Corn", "🌽", "🌱", 25, 90_000L, 67, 3),
+    BEAN("Bean", "🫘", "🌱", 36, 120_000L, 96, 3),
+    STRAWBERRY("Strawberry", "🍓", "🌱", 52, 160_000L, 139, 3),
+    MUSHROOM("Mushroom", "🍄", "🌱", 75, 210_000L, 200, 4),
+    BROCCOLI("Broccoli", "🥦", "🌱", 108, 300_000L, 288, 4),
+    ZUCCHINI("Zucchini", "🥒", "🌱", 155, 420_000L, 413, 4),
+    TOMATO("Tomato", "🍅", "🌿", 225, 540_000L, 600, 4),
+    BLUEBERRY("Blueberry", "🫐", "🌱", 325, 720_000L, 867, 5),
+    GRAPE("Grape", "🍇", "🌱", 468, 960_000L, 1_248, 5),
+    PUMPKIN("Pumpkin", "🎃", "🌿", 675, 1_320_000L, 1_800, 5),
+    PEPPER("Pepper", "🫑", "🌿", 972, 1_800_000L, 2_592, 6),
+    PINEAPPLE("Pineapple", "🍍", "🌿", 1_400, 2_400_000L, 3_733, 6),
+    WATERMELON("Watermelon", "🍉", "🌿", 2_000, 3_240_000L, 5_333, 7),
+    GARLIC("Garlic", "🧄", "🌱", 2_900, 4_500_000L, 7_733, 7),
+    KIWI("Kiwi", "🥝", "🌱", 4_200, 6_000_000L, 11_200, 7),
+    PEANUT("Peanut", "🥜", "🌱", 6_000, 8_100_000L, 16_000, 8),
+    HOT_PEPPER("Hot Pepper", "🌶️", "🌿", 8_650, 10_800_000L, 23_067, 8),
+    SNAP_PEA("Snap Pea", "🫛", "🌱", 12_500, 14_400_000L, 33_333, 9),
+    SAFFRON("Saffron", "🌸", "🌱", 18_000, 18_000_000L, 48_000, 9),
+    VANILLA("Vanilla", "🌺", "🌿", 26_000, 21_600_000L, 69_333, 10),
+    PURPLE_YAM("Purple Yam", "🍠", "🌱", 37_500, 25_200_000L, 100_000, 10),
+    TRUFFLE("Truffle", "🌰", "🌱", 54_000, 28_800_000L, 144_000, 10),
 }
 
-enum class PlotKind { GRASS, TILLED, PLANTED }
+enum class TreeType(
+    val displayName: String,
+    val treeEmoji: String,
+    val fruitEmoji: String,
+    val coinCost: Int,
+    val lifeMs: Long,
+    val harvestIntervalMs: Long,
+    val maxHarvests: Int,
+    val sellPrice: Int,
+    val plantEnergy: Int,
+) {
+    APPLE_TREE("Apple Tree", "🌳", "🍎", 500, 3_600_000L, 1_200_000L, 3, 400, 4),
+    PEACH_TREE("Peach Tree", "🌳", "🍑", 1_500, 7_200_000L, 1_800_000L, 4, 1_000, 5),
+    LEMON_TREE("Lemon Tree", "🌲", "🍋", 4_000, 10_800_000L, 2_700_000L, 4, 2_500, 6),
+    MANGO_TREE("Mango Tree", "🌴", "🥭", 12_000, 18_000_000L, 3_600_000L, 5, 6_000, 7),
+    COCONUT_PALM("Coconut Palm", "🌴", "🥥", 35_000, 28_800_000L, 5_760_000L, 5, 15_000, 9),
+}
+
+enum class PlotKind { GRASS, TILLED, PLANTED, TREE }
 
 data class Plot(
     val kind: PlotKind = PlotKind.GRASS,
     val crop: CropType? = null,
+    val tree: TreeType? = null,
     val plantedAtMs: Long = 0L,
     val watered: Boolean = false,
     val bonusMs: Long = 0L,
+    val harvestCount: Int = 0,
 ) {
     fun growthFraction(nowMs: Long): Float {
         if (kind != PlotKind.PLANTED || crop == null) return 0f
@@ -68,6 +81,27 @@ data class Plot(
         return (elapsed.toFloat() / crop.growthMs).coerceIn(0f, 1f)
     }
     fun isReady(nowMs: Long): Boolean = growthFraction(nowMs) >= 1f
+
+    fun treeIsDead(nowMs: Long): Boolean =
+        tree != null && nowMs >= plantedAtMs + tree.lifeMs
+
+    fun treeWindowsDue(nowMs: Long): Int {
+        val t = tree ?: return 0
+        return ((nowMs - plantedAtMs) / t.harvestIntervalMs).toInt().coerceAtMost(t.maxHarvests)
+    }
+
+    fun treeHarvestReady(nowMs: Long): Boolean =
+        tree != null && !treeIsDead(nowMs) && treeWindowsDue(nowMs) > harvestCount
+
+    fun treeNextHarvestMs(): Long {
+        val t = tree ?: return 0L
+        return plantedAtMs + (harvestCount + 1) * t.harvestIntervalMs
+    }
+
+    fun treeLifeFraction(nowMs: Long): Float {
+        val t = tree ?: return 0f
+        return ((nowMs - plantedAtMs).toFloat() / t.lifeMs).coerceIn(0f, 1f)
+    }
 }
 
 data class Upgrade(
@@ -102,6 +136,7 @@ data class FarmState(
     val coins: Int = STARTING_COINS,
     val harvested: Int = 0,
     val selectedSeed: CropType = CropType.CARROT,
+    val selectedTree: TreeType? = null,
     val upgradeLevels: Map<String, Int> = mapOf(
         "maxEnergy" to 0, "regen" to 0,
         "growthSpeed" to 0, "sellBonus" to 0, "waterBonus" to 0,
@@ -147,8 +182,10 @@ class FarmGame(context: Context) {
         val p = s.plots[idx]
         when (p.kind) {
             PlotKind.GRASS -> handleTill(s, idx)
-            PlotKind.TILLED -> handlePlant(s, idx, now)
+            PlotKind.TILLED -> if (s.selectedTree != null) handlePlantTree(s, idx, now)
+                               else handlePlant(s, idx, now)
             PlotKind.PLANTED -> handlePlanted(s, idx, p, now)
+            PlotKind.TREE -> handleTreeTap(s, idx, p, now)
         }
     }
 
@@ -216,9 +253,66 @@ class FarmGame(context: Context) {
     }
 
     fun selectSeed(crop: CropType) {
-        if (state.selectedSeed == crop) return
-        state = state.copy(selectedSeed = crop)
+        if (state.selectedSeed == crop && state.selectedTree == null) return
+        state = state.copy(selectedSeed = crop, selectedTree = null)
         save()
+    }
+
+    fun selectTree(tree: TreeType) {
+        if (state.selectedTree == tree) return
+        state = state.copy(selectedTree = tree)
+        save()
+    }
+
+    private fun handlePlantTree(s: FarmState, idx: Int, now: Long) {
+        val tree = s.selectedTree ?: return
+        if (s.coins < tree.coinCost) { fail("Need 🪙${tree.coinCost}"); return }
+        if (s.energy < tree.plantEnergy) { fail("Need ⚡${tree.plantEnergy}"); return }
+        state = s.copy(
+            energy = s.energy - tree.plantEnergy,
+            coins = s.coins - tree.coinCost,
+            plots = s.plots.replaceAt(idx, Plot(
+                kind = PlotKind.TREE,
+                tree = tree,
+                plantedAtMs = now,
+            )),
+        )
+        note("Planted ${tree.displayName.lowercase()}!")
+        save()
+    }
+
+    private fun handleTreeTap(s: FarmState, idx: Int, p: Plot, now: Long) {
+        val tree = p.tree ?: return
+        when {
+            p.treeIsDead(now) -> {
+                state = s.copy(plots = s.plots.replaceAt(idx, Plot()))
+                note("Removed the dead ${tree.displayName.lowercase()}.")
+                save()
+            }
+            p.treeHarvestReady(now) -> {
+                if (s.energy < ENERGY_HARVEST) { fail("Need ⚡$ENERGY_HARVEST"); return }
+                val sellBonusLvl = s.upgradeLevels["sellBonus"] ?: 0
+                val earned = tree.sellPrice + sellBonusLvl * 2
+                val windowsDue = p.treeWindowsDue(now)
+                state = s.copy(
+                    energy = s.energy - ENERGY_HARVEST,
+                    coins = s.coins + earned,
+                    harvested = s.harvested + 1,
+                    plots = s.plots.replaceAt(idx, p.copy(harvestCount = windowsDue)),
+                )
+                note("Harvested ${tree.displayName.lowercase()}! +🪙$earned")
+                save()
+            }
+            else -> {
+                val allDone = p.treeWindowsDue(now) >= tree.maxHarvests
+                val msg = if (allDone) {
+                    "All harvests done. Dies in ${prettyMs(p.plantedAtMs + tree.lifeMs - now)}."
+                } else {
+                    "Next harvest in ${prettyMs(p.treeNextHarvestMs() - now)}."
+                }
+                note(msg)
+            }
+        }
     }
 
     fun upgradeCost(up: Upgrade): Int {
@@ -260,6 +354,16 @@ class FarmGame(context: Context) {
     private fun note(msg: String) { feedback = msg; feedbackBad = false }
     private fun fail(msg: String) { feedback = msg; feedbackBad = true }
 
+    private fun prettyMs(ms: Long): String {
+        val s = ms / 1000
+        return when {
+            s <= 0 -> "now"
+            s < 60 -> "${s}s"
+            s < 3600 -> "${s / 60}m"
+            else -> "${s / 3600}h ${(s % 3600) / 60}m"
+        }
+    }
+
     private fun List<Plot>.replaceAt(idx: Int, value: Plot): List<Plot> =
         toMutableList().also { it[idx] = value }
 
@@ -272,7 +376,9 @@ class FarmGame(context: Context) {
                 .put("plantedAtMs", p.plantedAtMs)
                 .put("watered", p.watered)
                 .put("bonusMs", p.bonusMs)
+                .put("harvestCount", p.harvestCount)
             if (p.crop != null) o.put("crop", p.crop.name)
+            if (p.tree != null) o.put("tree", p.tree.name)
             plotsJson.put(o)
         }
         val upJson = JSONObject()
@@ -287,6 +393,7 @@ class FarmGame(context: Context) {
             .put("selectedSeed", s.selectedSeed.name)
             .put("upgrades", upJson)
             .put("plots", plotsJson)
+        if (s.selectedTree != null) json.put("selectedTree", s.selectedTree.name)
         prefs.edit().putString("state", json.toString()).apply()
     }
 
@@ -298,12 +405,24 @@ class FarmGame(context: Context) {
             val plots = ArrayList<Plot>(plotsJson.length())
             for (i in 0 until plotsJson.length()) {
                 val po = plotsJson.getJSONObject(i)
+                val kind = runCatching { PlotKind.valueOf(po.getString("kind")) }.getOrDefault(PlotKind.GRASS)
+                val crop = po.optString("crop").takeIf { it.isNotEmpty() }
+                    ?.let { runCatching { CropType.valueOf(it) }.getOrNull() }
+                val tree = po.optString("tree").takeIf { it.isNotEmpty() }
+                    ?.let { runCatching { TreeType.valueOf(it) }.getOrNull() }
+                val resolvedKind = when {
+                    kind == PlotKind.PLANTED && crop == null -> PlotKind.GRASS
+                    kind == PlotKind.TREE && tree == null -> PlotKind.GRASS
+                    else -> kind
+                }
                 plots.add(Plot(
-                    kind = PlotKind.valueOf(po.getString("kind")),
-                    crop = po.optString("crop").takeIf { it.isNotEmpty() }?.let { CropType.valueOf(it) },
+                    kind = resolvedKind,
+                    crop = if (resolvedKind == PlotKind.PLANTED) crop else null,
+                    tree = if (resolvedKind == PlotKind.TREE) tree else null,
                     plantedAtMs = po.optLong("plantedAtMs"),
                     watered = po.optBoolean("watered"),
                     bonusMs = po.optLong("bonusMs"),
+                    harvestCount = po.optInt("harvestCount"),
                 ))
             }
             val upMap = mutableMapOf<String, Int>()
@@ -328,6 +447,8 @@ class FarmGame(context: Context) {
                 harvested = o.optInt("harvested", 0),
                 selectedSeed = runCatching { CropType.valueOf(o.optString("selectedSeed", "CARROT")) }
                     .getOrDefault(CropType.CARROT),
+                selectedTree = o.optString("selectedTree").takeIf { it.isNotEmpty() }
+                    ?.let { runCatching { TreeType.valueOf(it) }.getOrNull() },
                 upgradeLevels = upMap,
                 plots = if (plots.size == PLOT_COUNT) plots else List(PLOT_COUNT) { Plot() },
             )

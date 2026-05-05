@@ -59,6 +59,7 @@ import com.shadaeiou.charmingfarmer.data.FarmGame
 import com.shadaeiou.charmingfarmer.data.FarmState
 import com.shadaeiou.charmingfarmer.data.Plot
 import com.shadaeiou.charmingfarmer.data.PlotKind
+import com.shadaeiou.charmingfarmer.data.TreeType
 import com.shadaeiou.charmingfarmer.data.UPGRADES
 import com.shadaeiou.charmingfarmer.data.Upgrade
 import kotlinx.coroutines.delay
@@ -117,7 +118,7 @@ fun HomeScreen(onOpenSettings: () -> Unit) {
             Spacer(Modifier.height(4.dp))
             FarmGrid(state, nowMs, modifier = Modifier.weight(1f), onPlotClick = { game.clickPlot(it) })
             Spacer(Modifier.height(8.dp))
-            SeedShelf(state.selectedSeed, onSelect = { game.selectSeed(it) })
+            SeedShelf(state, onSelectSeed = { game.selectSeed(it) }, onSelectTree = { game.selectTree(it) })
             Spacer(Modifier.height(8.dp))
             UpgradesRow(state, costFn = game::upgradeCost, onBuy = { game.buyUpgrade(it) })
             Spacer(Modifier.height(4.dp))
@@ -241,26 +242,24 @@ private fun FarmGrid(s: FarmState, nowMs: Long, modifier: Modifier = Modifier, o
 
 @Composable
 private fun PlotCell(plot: Plot, nowMs: Long, modifier: Modifier, onClick: () -> Unit) {
-    val (bg, borderColor) = when (plot.kind) {
-        PlotKind.GRASS -> GrassColor to GrassEdgeColor
-        PlotKind.TILLED, PlotKind.PLANTED -> SoilTilledColor to SoilDarkColor
+    val treeDead = plot.kind == PlotKind.TREE && plot.treeIsDead(nowMs)
+    val treeReady = plot.kind == PlotKind.TREE && !treeDead && plot.treeHarvestReady(nowMs)
+    val (bg, borderColor) = when {
+        treeDead -> Color(0xFF4A3020) to Color(0xFF2A180A)
+        plot.kind == PlotKind.TREE -> Color(0xFF5B3E1F) to SoilDarkColor
+        plot.kind == PlotKind.GRASS -> GrassColor to GrassEdgeColor
+        else -> SoilTilledColor to SoilDarkColor
     }
     val frac = plot.growthFraction(nowMs)
     val ready = plot.kind == PlotKind.PLANTED && frac >= 1f
 
-    val bounceScale = if (ready) {
-        val transition = rememberInfiniteTransition(label = "ready-bounce")
-        val scale by transition.animateFloat(
-            initialValue = 1f,
-            targetValue = 1.08f,
-            animationSpec = infiniteRepeatable(
-                animation = tween(durationMillis = 600),
-                repeatMode = RepeatMode.Reverse,
-            ),
-            label = "ready-scale",
-        )
-        scale
-    } else 1f
+    val transition = rememberInfiniteTransition(label = "bounce")
+    val pulseScale by transition.animateFloat(
+        initialValue = 1f, targetValue = 1.08f,
+        animationSpec = infiniteRepeatable(tween(600), RepeatMode.Reverse),
+        label = "pulse",
+    )
+    val bounceScale = if (ready || treeReady) pulseScale else 1f
 
     Box(
         modifier = modifier
@@ -270,60 +269,95 @@ private fun PlotCell(plot: Plot, nowMs: Long, modifier: Modifier, onClick: () ->
             .clickable { onClick() },
         contentAlignment = Alignment.Center,
     ) {
-        val content = when {
-            plot.kind != PlotKind.PLANTED -> ""
-            frac >= 1f -> plot.crop?.emoji ?: ""
-            frac > 0.5f -> plot.crop?.sprout ?: "🌱"
-            else -> "🌱"
-        }
-        if (content.isNotEmpty()) {
-            Text(
-                text = content,
-                fontSize = 30.sp,
-                modifier = Modifier.scale(bounceScale),
-            )
-        }
-        if (plot.kind == PlotKind.PLANTED && plot.watered && frac < 1f) {
-            Text(
-                "💧",
-                modifier = Modifier
-                    .align(Alignment.TopEnd)
-                    .padding(2.dp),
-                fontSize = 11.sp,
-            )
-        }
-        if (plot.kind == PlotKind.PLANTED) {
-            Box(
-                Modifier
-                    .align(Alignment.BottomCenter)
-                    .padding(horizontal = 4.dp, vertical = 4.dp)
-                    .fillMaxWidth()
-                    .height(4.dp)
-                    .clip(RoundedCornerShape(2.dp))
-                    .background(Color(0x66000000)),
-            ) {
-                val animFrac by animateFloatAsState(
-                    targetValue = frac,
-                    animationSpec = tween(300),
-                    label = "growth",
-                )
+        when (plot.kind) {
+            PlotKind.TREE -> {
+                val tree = plot.tree!!
+                if (treeDead) {
+                    Text("🪵", fontSize = 26.sp)
+                } else {
+                    Text(
+                        text = if (treeReady) tree.fruitEmoji else tree.treeEmoji,
+                        fontSize = 26.sp,
+                        modifier = Modifier.scale(bounceScale),
+                    )
+                    if (treeReady) {
+                        Text(
+                            tree.treeEmoji,
+                            fontSize = 11.sp,
+                            modifier = Modifier.align(Alignment.TopStart).padding(2.dp),
+                        )
+                    }
+                    Text(
+                        "${plot.harvestCount}/${tree.maxHarvests}",
+                        fontSize = 9.sp,
+                        color = Color.White.copy(alpha = 0.8f),
+                        modifier = Modifier.align(Alignment.TopEnd).padding(2.dp),
+                    )
+                    val lifeFrac = plot.treeLifeFraction(nowMs)
+                    val animLife by animateFloatAsState(lifeFrac, tween(300), label = "life")
+                    Box(
+                        Modifier
+                            .align(Alignment.BottomCenter)
+                            .padding(horizontal = 4.dp, vertical = 4.dp)
+                            .fillMaxWidth()
+                            .height(4.dp)
+                            .clip(RoundedCornerShape(2.dp))
+                            .background(Color(0x66000000)),
+                    ) {
+                        Box(
+                            Modifier
+                                .fillMaxWidth(1f - animLife)
+                                .fillMaxHeight()
+                                .clip(RoundedCornerShape(2.dp))
+                                .background(if (treeReady) ReadyColor else Color(0xFF7DB87D)),
+                        )
+                    }
+                }
+            }
+            PlotKind.PLANTED -> {
+                val content = when {
+                    frac >= 1f -> plot.crop?.emoji ?: ""
+                    frac > 0.5f -> plot.crop?.sprout ?: "🌱"
+                    else -> "🌱"
+                }
+                if (content.isNotEmpty()) {
+                    Text(text = content, fontSize = 30.sp, modifier = Modifier.scale(bounceScale))
+                }
+                if (plot.watered && frac < 1f) {
+                    Text("💧", fontSize = 11.sp,
+                        modifier = Modifier.align(Alignment.TopEnd).padding(2.dp))
+                }
+                val animFrac by animateFloatAsState(frac, tween(300), label = "growth")
                 Box(
                     Modifier
-                        .fillMaxWidth(animFrac)
-                        .fillMaxHeight()
+                        .align(Alignment.BottomCenter)
+                        .padding(horizontal = 4.dp, vertical = 4.dp)
+                        .fillMaxWidth().height(4.dp)
                         .clip(RoundedCornerShape(2.dp))
-                        .background(if (frac >= 1f) ReadyColor else GrassColor),
-                )
+                        .background(Color(0x66000000)),
+                ) {
+                    Box(
+                        Modifier
+                            .fillMaxWidth(animFrac).fillMaxHeight()
+                            .clip(RoundedCornerShape(2.dp))
+                            .background(if (frac >= 1f) ReadyColor else GrassColor),
+                    )
+                }
             }
+            else -> Unit
         }
     }
 }
 
 @Composable
-private fun SeedShelf(selected: CropType, onSelect: (CropType) -> Unit) {
+private fun SeedShelf(
+    state: FarmState,
+    onSelectSeed: (CropType) -> Unit,
+    onSelectTree: (TreeType) -> Unit,
+) {
     Column {
         Text(
-            "🌱 Seed Shop",
+            "🌱 Seeds  🌳 Trees",
             style = MaterialTheme.typography.titleMedium,
             fontWeight = FontWeight.Bold,
         )
@@ -337,12 +371,66 @@ private fun SeedShelf(selected: CropType, onSelect: (CropType) -> Unit) {
             for (c in CropType.entries) {
                 SeedButton(
                     crop = c,
-                    selected = c == selected,
+                    selected = state.selectedTree == null && c == state.selectedSeed,
                     modifier = Modifier.width(80.dp),
-                    onClick = { onSelect(c) },
+                    onClick = { onSelectSeed(c) },
+                )
+            }
+            Box(
+                Modifier
+                    .width(1.dp)
+                    .fillMaxHeight()
+                    .background(MaterialTheme.colorScheme.outlineVariant)
+            )
+            for (t in TreeType.entries) {
+                TreeButton(
+                    tree = t,
+                    selected = t == state.selectedTree,
+                    modifier = Modifier.width(88.dp),
+                    onClick = { onSelectTree(t) },
                 )
             }
         }
+    }
+}
+
+@Composable
+private fun TreeButton(tree: TreeType, selected: Boolean, modifier: Modifier, onClick: () -> Unit) {
+    val borderColor = if (selected) MaterialTheme.colorScheme.tertiary
+        else MaterialTheme.colorScheme.outline.copy(alpha = 0.4f)
+    val bg = if (selected) MaterialTheme.colorScheme.tertiaryContainer
+        else MaterialTheme.colorScheme.surface
+    Column(
+        modifier = modifier
+            .clip(RoundedCornerShape(10.dp))
+            .background(bg)
+            .border(if (selected) 3.dp else 2.dp, borderColor, RoundedCornerShape(10.dp))
+            .clickable { onClick() }
+            .padding(vertical = 6.dp, horizontal = 4.dp),
+        horizontalAlignment = Alignment.CenterHorizontally,
+    ) {
+        Text("${tree.treeEmoji}${tree.fruitEmoji}", fontSize = 18.sp)
+        Text(
+            tree.displayName,
+            style = MaterialTheme.typography.labelSmall,
+            fontWeight = FontWeight.Bold,
+            textAlign = TextAlign.Center,
+        )
+        Text(
+            "🪙${tree.coinCost}",
+            style = MaterialTheme.typography.labelSmall,
+            color = MaterialTheme.colorScheme.onSurfaceVariant,
+        )
+        Text(
+            "${tree.maxHarvests}×🪙${tree.sellPrice}",
+            style = MaterialTheme.typography.labelSmall,
+            color = MaterialTheme.colorScheme.onSurfaceVariant,
+        )
+        Text(
+            prettyTime(tree.lifeMs),
+            style = MaterialTheme.typography.labelSmall,
+            color = MaterialTheme.colorScheme.onSurfaceVariant,
+        )
     }
 }
 

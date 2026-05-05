@@ -8,6 +8,18 @@ data class ReleaseNote(
 
 val CHANGELOG: List<ReleaseNote> = listOf(
     ReleaseNote(
+        version = "0.3.0",
+        date = "2026-05-05",
+        bullets = listOf(
+            "Crops now exponentially expensive — Truffle tops at 54,000 coins",
+            "Removed tree-grown crops (apples, peaches, mangoes…) — plant real trees instead",
+            "Five plantable trees: Apple, Peach, Lemon, Mango, Coconut Palm",
+            "Trees live 1–8 hours and yield multiple harvests; miss a window, lose that harvest",
+            "Dead trees must be tapped to clear before tilling again",
+            "Tree nursery scrolls alongside the seed shelf",
+        ),
+    ),
+    ReleaseNote(
         version = "0.1.9",
         date = "2026-05-05",
         bullets = listOf(
