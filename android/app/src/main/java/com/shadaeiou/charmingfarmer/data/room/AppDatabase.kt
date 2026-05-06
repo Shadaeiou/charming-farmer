@@ -127,6 +127,25 @@ data class KilnRunEntity(
     @ColumnInfo(name = "start_ms") val startMs: Long,
 )
 
+/**
+ * One row per brewing batch in flight. Recipe references [BeerRecipe]
+ * by name; ingredient_scores_json carries the input quality data
+ * captured at brew start so the final BJCP score can be computed
+ * deterministically when the batch finishes. Stage transitions live
+ * entirely in the engine — only stage_started_ms is persisted, so
+ * resuming after a kill resumes from the right point in the right
+ * stage. Schema added in v3.
+ */
+@Entity(tableName = "brew_batches")
+data class BrewBatchEntity(
+    @PrimaryKey val id: Long,
+    val recipe: String,
+    val stage: String,
+    @ColumnInfo(name = "stage_started_ms") val stageStartedMs: Long,
+    @ColumnInfo(name = "ingredient_scores_json") val ingredientScoresJson: String,
+    @ColumnInfo(name = "ingredient_tier") val ingredientTier: String,
+)
+
 // -- DAOs -------------------------------------------------------------
 
 @Dao
@@ -262,6 +281,21 @@ interface KilnRunDao {
     fun deleteAll()
 }
 
+@Dao
+interface BrewBatchDao {
+    @Query("SELECT * FROM brew_batches")
+    fun getAll(): List<BrewBatchEntity>
+
+    @Insert(onConflict = OnConflictStrategy.REPLACE)
+    fun insert(batch: BrewBatchEntity)
+
+    @Query("DELETE FROM brew_batches WHERE id = :id")
+    fun deleteById(id: Long)
+
+    @Query("DELETE FROM brew_batches")
+    fun deleteAll()
+}
+
 // -- Migrations -------------------------------------------------------
 
 val MIGRATION_1_2: Migration = object : Migration(1, 2) {
@@ -281,6 +315,23 @@ val MIGRATION_1_2: Migration = object : Migration(1, 2) {
     }
 }
 
+val MIGRATION_2_3: Migration = object : Migration(2, 3) {
+    override fun migrate(db: SupportSQLiteDatabase) {
+        db.execSQL(
+            """
+            CREATE TABLE IF NOT EXISTS brew_batches (
+                id INTEGER NOT NULL PRIMARY KEY,
+                recipe TEXT NOT NULL,
+                stage TEXT NOT NULL,
+                stage_started_ms INTEGER NOT NULL,
+                ingredient_scores_json TEXT NOT NULL,
+                ingredient_tier TEXT NOT NULL
+            )
+            """.trimIndent()
+        )
+    }
+}
+
 // -- Database ---------------------------------------------------------
 
 @Database(
@@ -294,8 +345,9 @@ val MIGRATION_1_2: Migration = object : Migration(1, 2) {
         TransportTripEntity::class,
         SystemMetaEntity::class,
         KilnRunEntity::class,
+        BrewBatchEntity::class,
     ],
-    version = 2,
+    version = 3,
     exportSchema = false,
 )
 abstract class AppDatabase : RoomDatabase() {
@@ -308,6 +360,7 @@ abstract class AppDatabase : RoomDatabase() {
     abstract fun trips(): TripDao
     abstract fun systemMeta(): SystemMetaDao
     abstract fun kilnRuns(): KilnRunDao
+    abstract fun brewBatches(): BrewBatchDao
 
     companion object {
         @Volatile private var instance: AppDatabase? = null
@@ -328,7 +381,7 @@ abstract class AppDatabase : RoomDatabase() {
             // a coroutine scope held on the FarmGame, but at our scale
             // this stays well under a frame.
             Room.databaseBuilder(appContext, AppDatabase::class.java, "charming-farmer.db")
-                .addMigrations(MIGRATION_1_2)
+                .addMigrations(MIGRATION_1_2, MIGRATION_2_3)
                 .allowMainThreadQueries()
                 .build()
     }

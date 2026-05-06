@@ -8,6 +8,18 @@ data class ReleaseNote(
 
 val CHANGELOG: List<ReleaseNote> = listOf(
     ReleaseNote(
+        version = "0.1.34",
+        date = "2026-05-06",
+        bullets = listOf(
+            "🍺 Brewery is open! Pick a recipe (Pale Ale, IPA, Dry Stout, Hefeweizen), spend ⚡ + 🪙, and watch a batch run mash → boil → ferment → bottle in real time",
+            "Each finished beer gets a BJCP-style score (Aroma 24 / Appearance 6 / Flavor 40 / Mouthfeel 10 / Overall 20) — tap Notes on a bottled batch to see the breakdown",
+            "Off-flavor diagnostics on lower scores tell you what went wrong in real-brewer terms (DMS, banana esters, acetaldehyde, etc.)",
+            "Sell bottled beer from the brewery cellar — payout scales with quality, so a Grade S stout makes a Grade C IPA look stingy",
+            "Transport panel cleanup: each destination is now a full-width labeled button, and shipping rules filter per-item (no more sending hops to the malthouse)",
+            "Malthouse icon swapped from 🌾 → 🏭 so it stops looking identical to the farm",
+        ),
+    ),
+    ReleaseNote(
         version = "0.1.29",
         date = "2026-05-06",
         bullets = listOf(

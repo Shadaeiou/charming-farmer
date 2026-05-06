@@ -2,7 +2,6 @@ package com.shadaeiou.charmingfarmer
 
 import android.Manifest
 import android.annotation.SuppressLint
-import android.content.Context
 import android.content.Intent
 import android.content.pm.PackageManager
 import android.os.Build
@@ -23,6 +22,7 @@ import androidx.navigation.compose.rememberNavController
 import com.shadaeiou.charmingfarmer.data.DownloadResult
 import com.shadaeiou.charmingfarmer.data.Updater
 import com.shadaeiou.charmingfarmer.ui.BirdwatchingScreen
+import com.shadaeiou.charmingfarmer.ui.BreweryScreen
 import com.shadaeiou.charmingfarmer.ui.FarmerTheme
 import com.shadaeiou.charmingfarmer.ui.FishingScreen
 import com.shadaeiou.charmingfarmer.ui.HomeScreen
@@ -35,8 +35,7 @@ import kotlinx.coroutines.SupervisorJob
 import kotlinx.coroutines.launch
 import kotlinx.coroutines.withContext
 
-private const val PREFS_NAV = "charming-farmer-nav"
-private const val KEY_LAST_DEST = "last_dest"
+private const val KEY_LAST_DEST_META = "last_dest"
 
 class MainActivity : ComponentActivity() {
 
@@ -136,10 +135,14 @@ class MainActivity : ComponentActivity() {
 @Composable
 private fun Root() {
     val context = LocalContext.current
-    val prefs = context.getSharedPreferences(PREFS_NAV, Context.MODE_PRIVATE)
-    val startDest = prefs.getString(KEY_LAST_DEST, "home") ?: "home"
+    // Last-visited screen used to live in its own SharedPreferences blob;
+    // it now rides along in system_meta so storage is fully unified.
+    val db = remember { com.shadaeiou.charmingfarmer.data.room.AppDatabase.get(context.applicationContext) }
+    val startDest = db.systemMeta().get(KEY_LAST_DEST_META) ?: "home"
 
-    fun saveLastDest(dest: String) = prefs.edit().putString(KEY_LAST_DEST, dest).apply()
+    fun saveLastDest(dest: String) {
+        db.systemMeta().put(KEY_LAST_DEST_META, dest)
+    }
 
     val nav = rememberNavController()
     NavHost(navController = nav, startDestination = startDest) {
@@ -175,6 +178,10 @@ private fun Root() {
                     saveLastDest("malthouse")
                     nav.navigate("malthouse") { popUpTo("map") { inclusive = true } }
                 },
+                onGoToBrewery = {
+                    saveLastDest("brewery")
+                    nav.navigate("brewery") { popUpTo("map") { inclusive = true } }
+                },
                 onClose = { nav.popBackStack() },
             )
         }
@@ -195,6 +202,13 @@ private fun Root() {
         composable("malthouse") {
             saveLastDest("malthouse")
             MalthouseScreen(
+                onBack = { nav.popBackStack() },
+                onOpenMap = { nav.navigate("map") },
+            )
+        }
+        composable("brewery") {
+            saveLastDest("brewery")
+            BreweryScreen(
                 onBack = { nav.popBackStack() },
                 onOpenMap = { nav.navigate("map") },
             )
