@@ -47,6 +47,8 @@ import androidx.compose.runtime.setValue
 import androidx.compose.ui.Alignment
 import androidx.compose.ui.Modifier
 import androidx.compose.ui.draw.clip
+import androidx.compose.ui.draw.alpha
+import androidx.compose.ui.draw.scale
 import androidx.compose.ui.graphics.Brush
 import androidx.compose.ui.graphics.Color
 import androidx.compose.foundation.layout.offset
@@ -68,6 +70,8 @@ private const val MAX_BIRD_DURATION_MS = 7_000L
 private const val MIN_SPAWN_INTERVAL_MS = 1_400L
 private const val MAX_SPAWN_INTERVAL_MS = 3_000L
 private const val MAX_BIRDS_ON_SCREEN = 3
+private const val LITTER_SPAWN_CHANCE = 0.20f
+private const val EXPLOSION_DURATION_MS = 900L
 
 private val SkyTopColor = Color(0xFF8FCFFF)
 private val SkyBottomColor = Color(0xFFCFE9FF)
@@ -95,6 +99,14 @@ private val BIRD_TABLE = listOf(
 )
 private val BIRD_TOTAL_WEIGHT = BIRD_TABLE.sumOf { it.weight }
 
+private val LITTER_TABLE = listOf(
+    "🎈" to "Balloon",
+    "📄" to "Paper",
+    "🍃" to "Leaf",
+    "🪁" to "Kite",
+    "🗞️" to "Newspaper",
+)
+
 private fun rollBird(): BirdSpecies {
     var roll = Random.nextInt(BIRD_TOTAL_WEIGHT)
     for (b in BIRD_TABLE) {
@@ -113,16 +125,38 @@ private data class FlyingBird(
     val leftToRight: Boolean,
 )
 
+private data class FlyingLitter(
+    val id: Long,
+    val emoji: String,
+    val name: String,
+    val startMs: Long,
+    val durationMs: Long,
+    val yPercent: Float,
+    val leftToRight: Boolean,
+)
+
+private data class Explosion(
+    val id: Long,
+    val xFrac: Float,
+    val yPercent: Float,
+    val startMs: Long,
+)
+
 @OptIn(ExperimentalMaterial3Api::class)
 @Composable
 fun BirdwatchingScreen(onBack: () -> Unit, onOpenMap: () -> Unit) {
     val ctx = LocalContext.current
     val game = remember { FarmGame(ctx.applicationContext) }
     var nowMs by remember { mutableLongStateOf(System.currentTimeMillis()) }
+    val sessionStartMs = remember { System.currentTimeMillis() }
 
     val birds = remember { mutableStateListOf<FlyingBird>() }
+    val litters = remember { mutableStateListOf<FlyingLitter>() }
+    val explosions = remember { mutableStateListOf<Explosion>() }
     var nextSpawnMs by remember { mutableLongStateOf(0L) }
     var nextBirdId by remember { mutableLongStateOf(1L) }
+    var nextLitterId by remember { mutableLongStateOf(1L) }
+    var nextExplosionId by remember { mutableLongStateOf(1L) }
     var feedback by remember { mutableStateOf<String?>(null) }
     var feedbackBad by remember { mutableStateOf(false) }
     var lastSpot by remember { mutableStateOf<BirdSpecies?>(null) }
@@ -132,21 +166,48 @@ fun BirdwatchingScreen(onBack: () -> Unit, onOpenMap: () -> Unit) {
             game.tick()
             val now = System.currentTimeMillis()
             nowMs = now
-            // Despawn birds whose flight has ended.
+
+            // Speed ramps from 1× to 3× over 8 minutes, then plateaus.
+            val sessionMin = (now - sessionStartMs) / 60_000f
+            val speedFactor = 1f + (sessionMin.coerceAtMost(8f) / 8f) * 2f
+            val adjMinDuration = (MIN_BIRD_DURATION_MS / speedFactor).toLong().coerceIn(1_800L, MIN_BIRD_DURATION_MS)
+            val adjMaxDuration = (MAX_BIRD_DURATION_MS / speedFactor).toLong().coerceIn(2_500L, MAX_BIRD_DURATION_MS)
+            val adjMinSpawn = (MIN_SPAWN_INTERVAL_MS / speedFactor).toLong().coerceIn(500L, MIN_SPAWN_INTERVAL_MS)
+            val adjMaxSpawn = (MAX_SPAWN_INTERVAL_MS / speedFactor).toLong().coerceIn(700L, MAX_SPAWN_INTERVAL_MS)
+
+            // Despawn expired entities.
             birds.removeAll { now - it.startMs >= it.durationMs }
-            // Spawn a new bird if we're due and there's room.
-            if (now >= nextSpawnMs && birds.size < MAX_BIRDS_ON_SCREEN) {
-                birds.add(
-                    FlyingBird(
-                        id = nextBirdId++,
-                        species = rollBird(),
-                        startMs = now,
-                        durationMs = Random.nextLong(MIN_BIRD_DURATION_MS, MAX_BIRD_DURATION_MS),
-                        yPercent = Random.nextFloat() * 0.6f + 0.10f,
-                        leftToRight = Random.nextBoolean(),
+            litters.removeAll { now - it.startMs >= it.durationMs }
+            explosions.removeAll { now - it.startMs >= EXPLOSION_DURATION_MS }
+
+            // Spawn a new entity if we're due and there's room.
+            if (now >= nextSpawnMs && birds.size + litters.size < MAX_BIRDS_ON_SCREEN) {
+                if (Random.nextFloat() < LITTER_SPAWN_CHANCE) {
+                    val entry = LITTER_TABLE.random()
+                    litters.add(
+                        FlyingLitter(
+                            id = nextLitterId++,
+                            emoji = entry.first,
+                            name = entry.second,
+                            startMs = now,
+                            durationMs = Random.nextLong(adjMinDuration, adjMaxDuration + 1),
+                            yPercent = Random.nextFloat() * 0.6f + 0.10f,
+                            leftToRight = Random.nextBoolean(),
+                        )
                     )
-                )
-                nextSpawnMs = now + Random.nextLong(MIN_SPAWN_INTERVAL_MS, MAX_SPAWN_INTERVAL_MS)
+                } else {
+                    birds.add(
+                        FlyingBird(
+                            id = nextBirdId++,
+                            species = rollBird(),
+                            startMs = now,
+                            durationMs = Random.nextLong(adjMinDuration, adjMaxDuration + 1),
+                            yPercent = Random.nextFloat() * 0.6f + 0.10f,
+                            leftToRight = Random.nextBoolean(),
+                        )
+                    )
+                }
+                nextSpawnMs = now + Random.nextLong(adjMinSpawn, adjMaxSpawn + 1)
             }
             delay(50)
         }
@@ -169,6 +230,24 @@ fun BirdwatchingScreen(onBack: () -> Unit, onOpenMap: () -> Unit) {
         lastSpot = bird.species
         feedback = "Spotted ${bird.species.displayName}! +🪙${bird.species.coins}"
         feedbackBad = false
+    }
+
+    fun tapLitter(litter: FlyingLitter) {
+        if (!litters.remove(litter)) return
+        val now = System.currentTimeMillis()
+        val elapsed = (now - litter.startMs).coerceAtLeast(0L)
+        val t = (elapsed.toFloat() / litter.durationMs).coerceIn(0f, 1f)
+        val xFrac = if (litter.leftToRight) t * 1.2f - 0.1f else (1f - t) * 1.2f - 0.1f
+        explosions.add(
+            Explosion(
+                id = nextExplosionId++,
+                xFrac = xFrac.coerceIn(0.05f, 0.95f),
+                yPercent = litter.yPercent,
+                startMs = now,
+            )
+        )
+        feedback = "That's a ${litter.name}, not a bird! 💥"
+        feedbackBad = true
     }
 
     Scaffold(
@@ -248,7 +327,7 @@ fun BirdwatchingScreen(onBack: () -> Unit, onOpenMap: () -> Unit) {
             Spacer(Modifier.height(8.dp))
 
             Text(
-                text = feedback ?: "Tap birds as they fly past (⚡$SPOT_ENERGY_COST per spot).",
+                text = feedback ?: "Tap birds as they fly past (⚡$SPOT_ENERGY_COST per spot). Avoid the litter!",
                 modifier = Modifier
                     .fillMaxWidth()
                     .padding(horizontal = 4.dp, vertical = 4.dp),
@@ -261,8 +340,11 @@ fun BirdwatchingScreen(onBack: () -> Unit, onOpenMap: () -> Unit) {
 
             Sky(
                 birds = birds,
+                litters = litters,
+                explosions = explosions,
                 nowMs = nowMs,
                 onBirdTap = ::spot,
+                onLitterTap = ::tapLitter,
                 modifier = Modifier
                     .fillMaxWidth()
                     .weight(1f),
@@ -280,8 +362,11 @@ fun BirdwatchingScreen(onBack: () -> Unit, onOpenMap: () -> Unit) {
 @Composable
 private fun Sky(
     birds: List<FlyingBird>,
+    litters: List<FlyingLitter>,
+    explosions: List<Explosion>,
     nowMs: Long,
     onBirdTap: (FlyingBird) -> Unit,
+    onLitterTap: (FlyingLitter) -> Unit,
     modifier: Modifier,
 ) {
     BoxWithConstraints(
@@ -313,11 +398,10 @@ private fun Sky(
             )
         }
 
-        // The actual flock — each bird is its own clickable Text positioned by elapsed time.
+        // Birds — each clickable Text positioned by elapsed time.
         birds.forEach { bird ->
             val elapsed = (nowMs - bird.startMs).coerceAtLeast(0)
             val t = (elapsed.toFloat() / bird.durationMs).coerceIn(0f, 1f)
-            // Bird travels off-screen on either side, so map t onto a slightly wider range.
             val xFrac = if (bird.leftToRight) t * 1.2f - 0.1f else (1f - t) * 1.2f - 0.1f
             val xPx = (xFrac * widthPx).roundToInt()
             val yPx = (bird.yPercent * heightPx).roundToInt()
@@ -327,6 +411,40 @@ private fun Sky(
                 modifier = Modifier
                     .offset { IntOffset(xPx, yPx) }
                     .clickable { onBirdTap(bird) },
+            )
+        }
+
+        // Litter items — tap them and get an explosion instead of coins.
+        litters.forEach { litter ->
+            val elapsed = (nowMs - litter.startMs).coerceAtLeast(0)
+            val t = (elapsed.toFloat() / litter.durationMs).coerceIn(0f, 1f)
+            val xFrac = if (litter.leftToRight) t * 1.2f - 0.1f else (1f - t) * 1.2f - 0.1f
+            val xPx = (xFrac * widthPx).roundToInt()
+            val yPx = (litter.yPercent * heightPx).roundToInt()
+            Text(
+                litter.emoji,
+                fontSize = 28.sp,
+                modifier = Modifier
+                    .offset { IntOffset(xPx, yPx) }
+                    .clickable { onLitterTap(litter) },
+            )
+        }
+
+        // Explosion effects when litter is tapped.
+        explosions.forEach { ex ->
+            val elapsed = (nowMs - ex.startMs).toFloat()
+            val progress = (elapsed / EXPLOSION_DURATION_MS).coerceIn(0f, 1f)
+            val exAlpha = (1f - progress).coerceAtLeast(0f)
+            val exScale = 1f + progress * 1.2f
+            val xPx = (ex.xFrac * widthPx).roundToInt()
+            val yPx = (ex.yPercent * heightPx).roundToInt()
+            Text(
+                "💥",
+                fontSize = 40.sp,
+                modifier = Modifier
+                    .offset { IntOffset(xPx, yPx) }
+                    .alpha(exAlpha)
+                    .scale(exScale),
             )
         }
 
@@ -381,4 +499,3 @@ private fun Collection(birdsSeen: Map<String, Int>) {
         }
     }
 }
-
