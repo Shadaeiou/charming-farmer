@@ -1,11 +1,13 @@
 package com.shadaeiou.charmingfarmer.ui
 
+import androidx.compose.animation.core.LinearEasing
 import androidx.compose.animation.core.RepeatMode
 import androidx.compose.animation.core.animateFloat
 import androidx.compose.animation.core.animateFloatAsState
 import androidx.compose.animation.core.infiniteRepeatable
 import androidx.compose.animation.core.rememberInfiniteTransition
 import androidx.compose.animation.core.tween
+import androidx.compose.foundation.Canvas
 import androidx.compose.foundation.background
 import androidx.compose.foundation.border
 import androidx.compose.foundation.clickable
@@ -58,6 +60,7 @@ import androidx.compose.ui.draw.alpha
 import androidx.compose.ui.draw.clip
 import androidx.compose.ui.draw.scale
 import androidx.compose.ui.graphics.Color
+import androidx.compose.ui.graphics.drawscope.drawIntoCanvas
 import androidx.compose.ui.input.pointer.pointerInput
 import androidx.compose.ui.platform.LocalContext
 import androidx.compose.ui.platform.LocalDensity
@@ -76,9 +79,11 @@ import com.shadaeiou.charmingfarmer.data.FarmGame
 import com.shadaeiou.charmingfarmer.data.FarmState
 import com.shadaeiou.charmingfarmer.data.Plot
 import com.shadaeiou.charmingfarmer.data.PlotKind
+import com.shadaeiou.charmingfarmer.data.Season
 import com.shadaeiou.charmingfarmer.data.TreeType
 import com.shadaeiou.charmingfarmer.data.UPGRADES
 import com.shadaeiou.charmingfarmer.data.Upgrade
+import kotlin.random.Random
 import kotlinx.coroutines.delay
 import kotlinx.coroutines.withTimeoutOrNull
 
@@ -96,6 +101,7 @@ fun HomeScreen(onOpenSettings: () -> Unit, onOpenMap: () -> Unit) {
     val game = remember { FarmGame(ctx.applicationContext) }
     val transport = remember { com.shadaeiou.charmingfarmer.data.TransportService.get(ctx.applicationContext) }
     var nowMs by remember { mutableLongStateOf(System.currentTimeMillis()) }
+    var currentSeason by remember { mutableStateOf(Season.current()) }
     var transportOpen by remember { mutableStateOf(false) }
 
     LaunchedEffect(Unit) {
@@ -103,6 +109,7 @@ fun HomeScreen(onOpenSettings: () -> Unit, onOpenMap: () -> Unit) {
             game.tick()
             transport.tick(System.currentTimeMillis())
             nowMs = System.currentTimeMillis()
+            currentSeason = Season.current()
             delay(250)
         }
     }
@@ -122,47 +129,53 @@ fun HomeScreen(onOpenSettings: () -> Unit, onOpenMap: () -> Unit) {
 
     val state = game.state
 
-    Scaffold(
-        topBar = {
-            TopAppBar(
-                title = { Text("🌾 Charming Farmer", fontWeight = FontWeight.Bold) },
-                actions = {
-                    IconButton(onClick = { transportOpen = true }) {
-                        Icon(Icons.Filled.LocalShipping, contentDescription = "Transport")
-                    }
-                    IconButton(onClick = onOpenSettings) {
-                        Icon(Icons.Filled.Settings, contentDescription = "Settings")
-                    }
-                    IconButton(onClick = onOpenMap) {
-                        Icon(Icons.Filled.Map, contentDescription = "Map")
-                    }
-                },
-                colors = TopAppBarDefaults.topAppBarColors(
-                    containerColor = MaterialTheme.colorScheme.primaryContainer,
-                    titleContentColor = MaterialTheme.colorScheme.onPrimaryContainer,
-                    actionIconContentColor = MaterialTheme.colorScheme.onPrimaryContainer,
-                ),
-            )
-        },
-    ) { padding ->
-        Column(
-            modifier = Modifier
-                .fillMaxSize()
-                .padding(padding)
-                .padding(horizontal = 12.dp, vertical = 8.dp),
-        ) {
-            StatCards(state)
-            Spacer(Modifier.height(4.dp))
-            FeedbackText(game.feedback, game.feedbackBad)
-            Spacer(Modifier.height(4.dp))
-            FarmGrid(state, nowMs, modifier = Modifier.weight(1f), onPlotClick = { game.clickPlot(it) })
-            Spacer(Modifier.height(6.dp))
-            SeedShelf(state, onSelect = { game.selectSeed(it) })
-            Spacer(Modifier.height(4.dp))
-            TreeNursery(state, onSelect = { game.selectTree(it) })
-            Spacer(Modifier.height(6.dp))
-            UpgradesRow(state, costFn = game::upgradeCost, onBuy = { game.buyUpgrade(it) })
-            Spacer(Modifier.height(4.dp))
+    Box(modifier = Modifier.fillMaxSize()) {
+        SeasonBackground(season = currentSeason, modifier = Modifier.fillMaxSize())
+        Scaffold(
+            containerColor = Color.Transparent,
+            topBar = {
+                TopAppBar(
+                    title = { Text("🌾 Charming Farmer", fontWeight = FontWeight.Bold) },
+                    actions = {
+                        IconButton(onClick = { transportOpen = true }) {
+                            Icon(Icons.Filled.LocalShipping, contentDescription = "Transport")
+                        }
+                        IconButton(onClick = onOpenSettings) {
+                            Icon(Icons.Filled.Settings, contentDescription = "Settings")
+                        }
+                        IconButton(onClick = onOpenMap) {
+                            Icon(Icons.Filled.Map, contentDescription = "Map")
+                        }
+                    },
+                    colors = TopAppBarDefaults.topAppBarColors(
+                        containerColor = MaterialTheme.colorScheme.primaryContainer,
+                        titleContentColor = MaterialTheme.colorScheme.onPrimaryContainer,
+                        actionIconContentColor = MaterialTheme.colorScheme.onPrimaryContainer,
+                    ),
+                )
+            },
+        ) { padding ->
+            Column(
+                modifier = Modifier
+                    .fillMaxSize()
+                    .padding(padding)
+                    .padding(horizontal = 12.dp, vertical = 8.dp),
+            ) {
+                StatCards(state)
+                Spacer(Modifier.height(4.dp))
+                SeasonBanner(currentSeason)
+                Spacer(Modifier.height(4.dp))
+                FeedbackText(game.feedback, game.feedbackBad)
+                Spacer(Modifier.height(4.dp))
+                FarmGrid(state, nowMs, currentSeason, modifier = Modifier.weight(1f), onPlotClick = { game.clickPlot(it) })
+                Spacer(Modifier.height(6.dp))
+                SeedShelf(state, currentSeason, onSelect = { game.selectSeed(it) })
+                Spacer(Modifier.height(4.dp))
+                TreeNursery(state, currentSeason, onSelect = { game.selectTree(it) })
+                Spacer(Modifier.height(6.dp))
+                UpgradesRow(state, costFn = game::upgradeCost, onBuy = { game.buyUpgrade(it) })
+                Spacer(Modifier.height(4.dp))
+            }
         }
     }
 }
@@ -229,6 +242,31 @@ private fun StatCards(s: FarmState) {
 }
 
 @Composable
+private fun SeasonBanner(season: Season) {
+    val (bg, fg) = when (season) {
+        Season.SPRING -> Color(0xFFD0F0B0) to Color(0xFF2D6A00)
+        Season.SUMMER -> Color(0xFF2E7D32) to Color.White
+        Season.FALL -> Color(0xFFBF360C) to Color.White
+        Season.WINTER -> Color(0xFF1565C0) to Color.White
+    }
+    Box(
+        modifier = Modifier
+            .fillMaxWidth()
+            .clip(RoundedCornerShape(8.dp))
+            .background(bg)
+            .padding(horizontal = 12.dp, vertical = 4.dp),
+        contentAlignment = Alignment.Center,
+    ) {
+        Text(
+            "${season.emoji} ${season.displayName}",
+            color = fg,
+            fontWeight = FontWeight.Bold,
+            style = MaterialTheme.typography.labelLarge,
+        )
+    }
+}
+
+@Composable
 private fun FeedbackText(msg: String?, bad: Boolean) {
     val text = msg ?: "Tap grass to till. Tap tilled soil to plant your selected seed."
     Text(
@@ -244,7 +282,13 @@ private fun FeedbackText(msg: String?, bad: Boolean) {
 }
 
 @Composable
-private fun FarmGrid(s: FarmState, nowMs: Long, modifier: Modifier = Modifier, onPlotClick: (Int) -> Unit) {
+private fun FarmGrid(
+    s: FarmState,
+    nowMs: Long,
+    currentSeason: Season,
+    modifier: Modifier = Modifier,
+    onPlotClick: (Int) -> Unit,
+) {
     BoxWithConstraints(modifier = modifier.fillMaxWidth()) {
         val gridSize = minOf(maxWidth, maxHeight)
         Box(
@@ -270,6 +314,7 @@ private fun FarmGrid(s: FarmState, nowMs: Long, modifier: Modifier = Modifier, o
                             PlotCell(
                                 plot = s.plots[idx],
                                 nowMs = nowMs,
+                                currentSeason = currentSeason,
                                 modifier = Modifier.weight(1f).fillMaxHeight(),
                                 onClick = { onPlotClick(idx) },
                             )
@@ -282,17 +327,20 @@ private fun FarmGrid(s: FarmState, nowMs: Long, modifier: Modifier = Modifier, o
 }
 
 @Composable
-private fun PlotCell(plot: Plot, nowMs: Long, modifier: Modifier, onClick: () -> Unit) {
+private fun PlotCell(plot: Plot, nowMs: Long, currentSeason: Season, modifier: Modifier, onClick: () -> Unit) {
     val treeDead = plot.kind == PlotKind.TREE && plot.treeIsDead(nowMs)
-    val treeReady = plot.kind == PlotKind.TREE && !treeDead && plot.treeHarvestReady(nowMs)
+    val treeWrongSeason = plot.kind == PlotKind.TREE && !treeDead && plot.treeReadyWrongSeason(nowMs, currentSeason)
+    val treeReady = plot.kind == PlotKind.TREE && !treeDead && !treeWrongSeason && plot.treeHarvestReady(nowMs)
+    val cropDead = plot.kind == PlotKind.PLANTED && plot.isCropDead(currentSeason)
     val (bg, borderColor) = when {
         treeDead -> Color(0xFF4A3020) to Color(0xFF2A180A)
+        cropDead -> Color(0xFF2A1A0A) to Color(0xFF140D05)
         plot.kind == PlotKind.TREE -> Color(0xFF5B3E1F) to SoilDarkColor
         plot.kind == PlotKind.GRASS -> GrassColor to GrassEdgeColor
         else -> SoilTilledColor to SoilDarkColor
     }
     val frac = plot.growthFraction(nowMs)
-    val ready = plot.kind == PlotKind.PLANTED && frac >= 1f
+    val ready = plot.kind == PlotKind.PLANTED && !cropDead && frac >= 1f
 
     val transition = rememberInfiniteTransition(label = "bounce")
     val pulseScale by transition.animateFloat(
@@ -316,13 +364,26 @@ private fun PlotCell(plot: Plot, nowMs: Long, modifier: Modifier, onClick: () ->
                 if (treeDead) {
                     Text("🪵", fontSize = 26.sp)
                 } else {
+                    val showFruit = treeReady || treeWrongSeason
                     Text(
-                        text = if (treeReady) tree.fruitEmoji else tree.treeEmoji,
+                        text = if (showFruit) tree.fruitEmoji else tree.treeEmoji,
                         fontSize = 26.sp,
-                        modifier = Modifier.scale(bounceScale),
+                        modifier = Modifier
+                            .scale(bounceScale)
+                            .alpha(if (treeWrongSeason) 0.5f else 1f),
                     )
+                    if (treeWrongSeason) {
+                        // Show the first harvest season emoji as a hint
+                        val hintSeason = tree.harvestSeasons
+                            .minByOrNull { listOf(Season.SPRING, Season.SUMMER, Season.FALL, Season.WINTER).indexOf(it) }
+                        Text(
+                            "${hintSeason?.emoji ?: ""}⏳",
+                            fontSize = 10.sp,
+                            modifier = Modifier.align(Alignment.BottomEnd).padding(2.dp),
+                        )
+                    }
                     Text(
-                        if (treeReady) tree.treeEmoji else tree.fruitEmoji,
+                        if (showFruit) tree.treeEmoji else tree.fruitEmoji,
                         fontSize = 11.sp,
                         modifier = Modifier.align(Alignment.TopStart).padding(2.dp),
                     )
@@ -348,46 +409,63 @@ private fun PlotCell(plot: Plot, nowMs: Long, modifier: Modifier, onClick: () ->
                                 .fillMaxWidth(1f - animLife)
                                 .fillMaxHeight()
                                 .clip(RoundedCornerShape(2.dp))
-                                .background(if (treeReady) ReadyColor else Color(0xFF7DB87D)),
+                                .background(
+                                    when {
+                                        treeWrongSeason -> Color(0xFF9E9E9E)
+                                        treeReady -> ReadyColor
+                                        else -> Color(0xFF7DB87D)
+                                    }
+                                ),
                         )
                     }
                 }
             }
             PlotKind.PLANTED -> {
-                val content = when {
-                    frac >= 1f -> plot.crop?.emoji ?: ""
-                    frac > 0.5f -> plot.crop?.sprout ?: "🌱"
-                    else -> "🌱"
-                }
-                if (content.isNotEmpty()) {
-                    Text(text = content, fontSize = 30.sp, modifier = Modifier.scale(bounceScale))
-                }
-                if (frac < 1f && plot.crop != null) {
-                    Text(
-                        plot.crop.emoji,
-                        fontSize = 11.sp,
-                        modifier = Modifier.align(Alignment.TopStart).padding(2.dp),
-                    )
-                }
-                if (plot.watered && frac < 1f) {
-                    Text("💧", fontSize = 11.sp,
-                        modifier = Modifier.align(Alignment.TopEnd).padding(2.dp))
-                }
-                val animFrac by animateFloatAsState(frac, tween(300), label = "growth")
-                Box(
-                    Modifier
-                        .align(Alignment.BottomCenter)
-                        .padding(horizontal = 4.dp, vertical = 4.dp)
-                        .fillMaxWidth().height(4.dp)
-                        .clip(RoundedCornerShape(2.dp))
-                        .background(Color(0x66000000)),
-                ) {
+                if (cropDead) {
+                    Text("💀", fontSize = 26.sp)
+                    plot.crop?.let {
+                        Text(
+                            it.emoji,
+                            fontSize = 11.sp,
+                            modifier = Modifier.align(Alignment.TopStart).padding(2.dp),
+                        )
+                    }
+                } else {
+                    val content = when {
+                        frac >= 1f -> plot.crop?.emoji ?: ""
+                        frac > 0.5f -> plot.crop?.sprout ?: "🌱"
+                        else -> "🌱"
+                    }
+                    if (content.isNotEmpty()) {
+                        Text(text = content, fontSize = 30.sp, modifier = Modifier.scale(bounceScale))
+                    }
+                    if (frac < 1f && plot.crop != null) {
+                        Text(
+                            plot.crop.emoji,
+                            fontSize = 11.sp,
+                            modifier = Modifier.align(Alignment.TopStart).padding(2.dp),
+                        )
+                    }
+                    if (plot.watered && frac < 1f) {
+                        Text("💧", fontSize = 11.sp,
+                            modifier = Modifier.align(Alignment.TopEnd).padding(2.dp))
+                    }
+                    val animFrac by animateFloatAsState(frac, tween(300), label = "growth")
                     Box(
                         Modifier
-                            .fillMaxWidth(animFrac).fillMaxHeight()
+                            .align(Alignment.BottomCenter)
+                            .padding(horizontal = 4.dp, vertical = 4.dp)
+                            .fillMaxWidth().height(4.dp)
                             .clip(RoundedCornerShape(2.dp))
-                            .background(if (frac >= 1f) ReadyColor else GrassColor),
-                    )
+                            .background(Color(0x66000000)),
+                    ) {
+                        Box(
+                            Modifier
+                                .fillMaxWidth(animFrac).fillMaxHeight()
+                                .clip(RoundedCornerShape(2.dp))
+                                .background(if (frac >= 1f) ReadyColor else GrassColor),
+                        )
+                    }
                 }
             }
             else -> Unit
@@ -396,7 +474,7 @@ private fun PlotCell(plot: Plot, nowMs: Long, modifier: Modifier, onClick: () ->
 }
 
 @Composable
-private fun SeedShelf(state: FarmState, onSelect: (CropType) -> Unit) {
+private fun SeedShelf(state: FarmState, currentSeason: Season, onSelect: (CropType) -> Unit) {
     Column {
         Text("🌱 Seeds", style = MaterialTheme.typography.titleSmall, fontWeight = FontWeight.Bold)
         Spacer(Modifier.height(4.dp))
@@ -409,6 +487,7 @@ private fun SeedShelf(state: FarmState, onSelect: (CropType) -> Unit) {
                     crop = c,
                     selected = state.selectedTree == null && c == state.selectedSeed,
                     coins = state.coins,
+                    currentSeason = currentSeason,
                     modifier = Modifier.width(80.dp),
                     onClick = { onSelect(c) },
                 )
@@ -418,7 +497,7 @@ private fun SeedShelf(state: FarmState, onSelect: (CropType) -> Unit) {
 }
 
 @Composable
-private fun TreeNursery(state: FarmState, onSelect: (TreeType) -> Unit) {
+private fun TreeNursery(state: FarmState, currentSeason: Season, onSelect: (TreeType) -> Unit) {
     Column {
         Text("🌳 Trees", style = MaterialTheme.typography.titleSmall, fontWeight = FontWeight.Bold)
         Spacer(Modifier.height(4.dp))
@@ -431,6 +510,7 @@ private fun TreeNursery(state: FarmState, onSelect: (TreeType) -> Unit) {
                     tree = t,
                     selected = t == state.selectedTree,
                     coins = state.coins,
+                    currentSeason = currentSeason,
                     modifier = Modifier.width(88.dp),
                     onClick = { onSelect(t) },
                 )
@@ -440,20 +520,26 @@ private fun TreeNursery(state: FarmState, onSelect: (TreeType) -> Unit) {
 }
 
 @Composable
-private fun TreeButton(tree: TreeType, selected: Boolean, coins: Int, modifier: Modifier, onClick: () -> Unit) {
+private fun TreeButton(tree: TreeType, selected: Boolean, coins: Int, currentSeason: Season, modifier: Modifier, onClick: () -> Unit) {
     val canAfford = coins >= tree.coinCost
+    val inHarvestSeason = currentSeason in tree.harvestSeasons
     var showTooltip by remember { mutableStateOf(false) }
     val revenuePerMin = tree.maxHarvests * tree.sellPrice * 60_000.0 / tree.lifeMs
     val borderColor = if (selected) MaterialTheme.colorScheme.tertiary
         else MaterialTheme.colorScheme.outline.copy(alpha = 0.4f)
     val bg = if (selected) MaterialTheme.colorScheme.tertiaryContainer
         else MaterialTheme.colorScheme.surface
+    val contentAlpha = if (canAfford) 1f else 0.38f
+    val seasonOrder = listOf(Season.SPRING, Season.SUMMER, Season.FALL, Season.WINTER)
+    val harvestSeasonStr = tree.harvestSeasons
+        .sortedBy { seasonOrder.indexOf(it) }
+        .joinToString("") { it.emoji }
 
     Box(modifier = modifier) {
         Column(
             modifier = Modifier
                 .fillMaxWidth()
-                .alpha(if (canAfford) 1f else 0.38f)
+                .alpha(contentAlpha)
                 .clip(RoundedCornerShape(10.dp))
                 .background(bg)
                 .border(if (selected) 3.dp else 2.dp, borderColor, RoundedCornerShape(10.dp))
@@ -488,6 +574,12 @@ private fun TreeButton(tree: TreeType, selected: Boolean, coins: Int, modifier: 
                 color = MaterialTheme.colorScheme.onSurfaceVariant,
                 textAlign = TextAlign.Center,
             )
+            Text(
+                if (inHarvestSeason) "🍂$harvestSeasonStr ✓" else "🍂$harvestSeasonStr",
+                fontSize = 9.sp,
+                color = if (inHarvestSeason) Color(0xFF2E7D32) else MaterialTheme.colorScheme.onSurfaceVariant,
+                textAlign = TextAlign.Center,
+            )
         }
         if (showTooltip) {
             AboveAnchorTooltip("${"%.1f".format(revenuePerMin)} coins/min")
@@ -500,22 +592,33 @@ private fun SeedButton(
     crop: CropType,
     selected: Boolean,
     coins: Int,
+    currentSeason: Season,
     modifier: Modifier,
     onClick: () -> Unit,
 ) {
     val canAfford = coins >= crop.coinCost
+    val inSeason = currentSeason in crop.plantSeasons
     var showTooltip by remember { mutableStateOf(false) }
     val revenuePerMin = crop.sellPrice * 60_000.0 / crop.growthMs
     val borderColor = if (selected) MaterialTheme.colorScheme.secondary
         else MaterialTheme.colorScheme.outline.copy(alpha = 0.4f)
     val bg = if (selected) MaterialTheme.colorScheme.secondaryContainer
         else MaterialTheme.colorScheme.surface
+    val contentAlpha = when {
+        !canAfford -> 0.38f
+        !inSeason -> 0.55f
+        else -> 1f
+    }
+    val seasonOrder = listOf(Season.SPRING, Season.SUMMER, Season.FALL, Season.WINTER)
+    val plantSeasonStr = crop.plantSeasons
+        .sortedBy { seasonOrder.indexOf(it) }
+        .joinToString("") { it.emoji }
 
     Box(modifier = modifier) {
         Column(
             modifier = Modifier
                 .fillMaxWidth()
-                .alpha(if (canAfford) 1f else 0.38f)
+                .alpha(contentAlpha)
                 .clip(RoundedCornerShape(10.dp))
                 .background(bg)
                 .border(if (selected) 3.dp else 2.dp, borderColor, RoundedCornerShape(10.dp))
@@ -548,6 +651,12 @@ private fun SeedButton(
                 "🪙${prettyCoins(crop.coinCost)}→${prettyCoins(crop.sellPrice)} ⚡${crop.plantEnergy}",
                 fontSize = 9.sp,
                 color = MaterialTheme.colorScheme.onSurfaceVariant,
+                textAlign = TextAlign.Center,
+            )
+            Text(
+                if (inSeason) "$plantSeasonStr ✓" else "❄︎$plantSeasonStr",
+                fontSize = 9.sp,
+                color = if (inSeason) Color(0xFF2E7D32) else Color(0xFFBF360C),
                 textAlign = TextAlign.Center,
             )
         }
@@ -653,6 +762,138 @@ private fun UpgradesRow(s: FarmState, costFn: (Upgrade) -> Int, onBuy: (Upgrade)
                         style = MaterialTheme.typography.labelSmall,
                         color = labelColor,
                     )
+                }
+            }
+        }
+    }
+}
+
+@Composable
+private fun SeasonBackground(season: Season, modifier: Modifier = Modifier) {
+    when (season) {
+        Season.FALL -> FallBackground(modifier)
+        Season.WINTER -> WinterBackground(modifier)
+        Season.SPRING -> SpringBackground(modifier)
+        Season.SUMMER -> SummerBackground(modifier)
+    }
+}
+
+@Composable
+private fun FallBackground(modifier: Modifier = Modifier) {
+    val paint = remember {
+        android.graphics.Paint().apply {
+            textSize = 34f
+            textAlign = android.graphics.Paint.Align.CENTER
+        }
+    }
+    val leafEmojis = listOf("🍁", "🍂", "🍁", "🍃", "🍁", "🍂")
+    val angles = listOf(-30f, 20f, -10f, 35f, 0f, -20f)
+    Canvas(modifier = modifier) {
+        drawRect(Color(0xFFE65100))
+        drawIntoCanvas { canvas ->
+            val step = 76f
+            val rows = (size.height / step).toInt() + 2
+            val cols = (size.width / step).toInt() + 2
+            for (row in 0..rows) {
+                val xOff = if (row % 2 == 0) 0f else step / 2
+                val y = row * step * 0.72f + step * 0.5f
+                for (col in 0..cols) {
+                    val x = col * step + xOff
+                    val emojiIdx = (row * (cols + 1) + col) % leafEmojis.size
+                    canvas.nativeCanvas.save()
+                    canvas.nativeCanvas.rotate(angles[emojiIdx], x, y)
+                    canvas.nativeCanvas.drawText(leafEmojis[emojiIdx], x, y, paint)
+                    canvas.nativeCanvas.restore()
+                }
+            }
+        }
+    }
+}
+
+@Composable
+private fun WinterBackground(modifier: Modifier = Modifier) {
+    val snowCount = 28
+    val snowflakes = remember {
+        List(snowCount) {
+            floatArrayOf(
+                Random.nextFloat(),
+                Random.nextFloat(),
+                0.4f + Random.nextFloat() * 0.9f,
+            )
+        }
+    }
+    val transition = rememberInfiniteTransition(label = "snow")
+    val progress by transition.animateFloat(
+        initialValue = 0f, targetValue = 1f,
+        animationSpec = infiniteRepeatable(tween(5000, easing = LinearEasing), RepeatMode.Restart),
+        label = "snowfall",
+    )
+    val paint = remember {
+        android.graphics.Paint().apply {
+            textSize = 20f
+            textAlign = android.graphics.Paint.Align.CENTER
+        }
+    }
+    Canvas(modifier = modifier) {
+        drawRect(Color(0xFFE0EEF8))
+        drawIntoCanvas { canvas ->
+            for (sf in snowflakes) {
+                val x = sf[0] * size.width
+                val y = ((sf[1] + progress * sf[2]) % 1f) * size.height
+                canvas.nativeCanvas.drawText("❄️", x, y, paint)
+            }
+        }
+    }
+}
+
+@Composable
+private fun SpringBackground(modifier: Modifier = Modifier) {
+    val paint = remember {
+        android.graphics.Paint().apply {
+            textSize = 28f
+            textAlign = android.graphics.Paint.Align.CENTER
+        }
+    }
+    val tulips = listOf("🌷", "🌸", "🌷", "🌼", "🌷", "💐", "🌸", "🌷")
+    Canvas(modifier = modifier) {
+        drawRect(Color(0xFFFFFDE7))
+        drawIntoCanvas { canvas ->
+            val step = 70f
+            val rows = (size.height / step).toInt() + 2
+            val cols = (size.width / step).toInt() + 2
+            for (row in 0..rows) {
+                val xOff = if (row % 2 == 0) 0f else step / 2
+                val y = row * step * 0.82f + step * 0.4f
+                for (col in 0..cols) {
+                    val x = col * step + xOff
+                    val emoji = tulips[(row * (cols + 1) + col) % tulips.size]
+                    canvas.nativeCanvas.drawText(emoji, x, y, paint)
+                }
+            }
+        }
+    }
+}
+
+@Composable
+private fun SummerBackground(modifier: Modifier = Modifier) {
+    val paint = remember {
+        android.graphics.Paint().apply {
+            textSize = 30f
+            textAlign = android.graphics.Paint.Align.CENTER
+        }
+    }
+    Canvas(modifier = modifier) {
+        drawRect(Color(0xFF2E7D32))
+        drawIntoCanvas { canvas ->
+            val step = 78f
+            val rows = (size.height / step).toInt() + 2
+            val cols = (size.width / step).toInt() + 2
+            for (row in 0..rows) {
+                val xOff = if (row % 2 == 0) 0f else step / 2
+                val y = row * step * 0.82f + step * 0.4f
+                for (col in 0..cols) {
+                    val x = col * step + xOff
+                    canvas.nativeCanvas.drawText("☀️", x, y, paint)
                 }
             }
         }

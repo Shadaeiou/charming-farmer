@@ -8,6 +8,18 @@ data class ReleaseNote(
 
 val CHANGELOG: List<ReleaseNote> = listOf(
     ReleaseNote(
+        version = "0.1.37",
+        date = "2026-05-06",
+        bullets = listOf(
+            "🍂 Farm seasons — the background changes to match the real-world season (fall leaves, winter snowfall, spring tulips, summer suns)",
+            "Each crop now has planting seasons based on real-world agriculture; out-of-season seeds are dimmed and blocked from planting",
+            "Plants survive one season past their last planting season, then wilt (💀) — tap the dead plot to clear it",
+            "Trees can only be harvested in their natural season; the harvest window stays open and the fruit becomes collectible once the right season arrives",
+            "Season banner shows the current season above the farm",
+            "Seed and tree shelf buttons now show their planting / harvest seasons",
+        ),
+    ),
+    ReleaseNote(
         version = "0.1.34",
         date = "2026-05-06",
         bullets = listOf(

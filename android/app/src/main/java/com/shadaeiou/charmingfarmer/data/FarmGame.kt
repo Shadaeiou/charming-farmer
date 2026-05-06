@@ -13,6 +13,37 @@ import com.shadaeiou.charmingfarmer.data.room.UpgradeLevelEntity
 import kotlin.math.pow
 import kotlin.random.Random
 
+enum class Season(val displayName: String, val emoji: String) {
+    SPRING("Spring", "🌷"),
+    SUMMER("Summer", "☀️"),
+    FALL("Fall", "🍁"),
+    WINTER("Winter", "❄️");
+
+    companion object {
+        private val ORDER = listOf(SPRING, SUMMER, FALL, WINTER)
+
+        fun current(): Season {
+            val month = java.util.Calendar.getInstance().get(java.util.Calendar.MONTH) + 1
+            return when (month) {
+                3, 4, 5 -> SPRING
+                6, 7, 8 -> SUMMER
+                9, 10, 11 -> FALL
+                else -> WINTER
+            }
+        }
+
+        /** How many seasons back from [current] until we hit a season in [plantSeasons]. */
+        fun seasonsSinceLastPlantable(current: Season, plantSeasons: Set<Season>): Int {
+            if (current in plantSeasons) return 0
+            for (steps in 1..3) {
+                val idx = (ORDER.indexOf(current) - steps + 4) % 4
+                if (ORDER[idx] in plantSeasons) return steps
+            }
+            return 4
+        }
+    }
+}
+
 enum class CropType(
     val displayName: String,
     val emoji: String,
@@ -24,38 +55,40 @@ enum class CropType(
     /** If non-null, harvesting this crop deposits the item into the FARM
      * silo with a rolled quality instead of paying coins. */
     val inventoryItem: ItemType? = null,
+    /** Seasons in which this crop can be planted. */
+    val plantSeasons: Set<Season> = Season.entries.toSet(),
 ) {
-    CARROT("Carrot", "🥕", "🌱", 3, 20_000L, 8, 2),
-    POTATO("Potato", "🥔", "🌱", 5, 25_000L, 13, 2),
-    LETTUCE("Lettuce", "🥬", "🌱", 8, 35_000L, 21, 2),
-    ONION("Onion", "🧅", "🌱", 12, 50_000L, 32, 2),
-    BARLEY("Barley", "🌾", "🌱", 6, 30_000L, 0, 2, ItemType.BARLEY),
-    WHEATGRAIN("Wheat (grain)", "🌾", "🌱", 10, 45_000L, 0, 2, ItemType.WHEAT_GRAIN),
-    OATS_CROP("Oats", "🌾", "🌱", 14, 60_000L, 0, 2, ItemType.OATS),
-    RYE_CROP("Rye", "🌾", "🌱", 18, 75_000L, 0, 2, ItemType.RYE),
-    WHEAT("Wheat", "🌾", "🌱", 17, 65_000L, 45, 3),
-    CORN("Corn", "🌽", "🌱", 25, 90_000L, 67, 3),
-    BEAN("Bean", "🫘", "🌱", 36, 120_000L, 96, 3),
-    STRAWBERRY("Strawberry", "🍓", "🌱", 52, 160_000L, 139, 3),
-    MUSHROOM("Mushroom", "🍄", "🌱", 75, 210_000L, 200, 4),
-    BROCCOLI("Broccoli", "🥦", "🌱", 108, 300_000L, 288, 4),
-    ZUCCHINI("Zucchini", "🥒", "🌱", 155, 420_000L, 413, 4),
-    TOMATO("Tomato", "🍅", "🌿", 225, 540_000L, 600, 4),
-    BLUEBERRY("Blueberry", "🫐", "🌱", 325, 720_000L, 867, 5),
-    GRAPE("Grape", "🍇", "🌱", 468, 960_000L, 1_248, 5),
-    PUMPKIN("Pumpkin", "🎃", "🌿", 675, 1_320_000L, 1_800, 5),
-    PEPPER("Pepper", "🫑", "🌿", 972, 1_800_000L, 2_592, 6),
-    PINEAPPLE("Pineapple", "🍍", "🌿", 1_400, 2_400_000L, 3_733, 6),
-    WATERMELON("Watermelon", "🍉", "🌿", 2_000, 3_240_000L, 5_333, 7),
-    GARLIC("Garlic", "🧄", "🌱", 2_900, 4_500_000L, 7_733, 7),
-    KIWI("Kiwi", "🥝", "🌱", 4_200, 6_000_000L, 11_200, 7),
-    PEANUT("Peanut", "🥜", "🌱", 6_000, 8_100_000L, 16_000, 8),
-    HOT_PEPPER("Hot Pepper", "🌶️", "🌿", 8_650, 10_800_000L, 23_067, 8),
-    SNAP_PEA("Snap Pea", "🫛", "🌱", 12_500, 14_400_000L, 33_333, 9),
-    SAFFRON("Saffron", "🌸", "🌱", 18_000, 18_000_000L, 48_000, 9),
-    VANILLA("Vanilla", "🌺", "🌿", 26_000, 21_600_000L, 69_333, 10),
-    PURPLE_YAM("Purple Yam", "🍠", "🌱", 37_500, 25_200_000L, 100_000, 10),
-    TRUFFLE("Truffle", "🌰", "🌱", 54_000, 28_800_000L, 144_000, 10),
+    CARROT("Carrot", "🥕", "🌱", 3, 20_000L, 8, 2, plantSeasons = setOf(Season.SPRING, Season.FALL)),
+    POTATO("Potato", "🥔", "🌱", 5, 25_000L, 13, 2, plantSeasons = setOf(Season.SPRING, Season.FALL)),
+    LETTUCE("Lettuce", "🥬", "🌱", 8, 35_000L, 21, 2, plantSeasons = setOf(Season.SPRING, Season.FALL)),
+    ONION("Onion", "🧅", "🌱", 12, 50_000L, 32, 2, plantSeasons = setOf(Season.SPRING, Season.FALL)),
+    BARLEY("Barley", "🌾", "🌱", 6, 30_000L, 0, 2, ItemType.BARLEY, setOf(Season.SPRING, Season.FALL)),
+    WHEATGRAIN("Wheat (grain)", "🌾", "🌱", 10, 45_000L, 0, 2, ItemType.WHEAT_GRAIN, setOf(Season.SPRING, Season.FALL)),
+    OATS_CROP("Oats", "🌾", "🌱", 14, 60_000L, 0, 2, ItemType.OATS, setOf(Season.SPRING, Season.FALL)),
+    RYE_CROP("Rye", "🌾", "🌱", 18, 75_000L, 0, 2, ItemType.RYE, setOf(Season.FALL, Season.WINTER)),
+    WHEAT("Wheat", "🌾", "🌱", 17, 65_000L, 45, 3, plantSeasons = setOf(Season.SPRING, Season.FALL)),
+    CORN("Corn", "🌽", "🌱", 25, 90_000L, 67, 3, plantSeasons = setOf(Season.SUMMER)),
+    BEAN("Bean", "🫘", "🌱", 36, 120_000L, 96, 3, plantSeasons = setOf(Season.SPRING, Season.SUMMER)),
+    STRAWBERRY("Strawberry", "🍓", "🌱", 52, 160_000L, 139, 3, plantSeasons = setOf(Season.SPRING, Season.SUMMER)),
+    MUSHROOM("Mushroom", "🍄", "🌱", 75, 210_000L, 200, 4, plantSeasons = setOf(Season.FALL, Season.WINTER, Season.SPRING)),
+    BROCCOLI("Broccoli", "🥦", "🌱", 108, 300_000L, 288, 4, plantSeasons = setOf(Season.SPRING, Season.FALL)),
+    ZUCCHINI("Zucchini", "🥒", "🌱", 155, 420_000L, 413, 4, plantSeasons = setOf(Season.SUMMER)),
+    TOMATO("Tomato", "🍅", "🌿", 225, 540_000L, 600, 4, plantSeasons = setOf(Season.SUMMER)),
+    BLUEBERRY("Blueberry", "🫐", "🌱", 325, 720_000L, 867, 5, plantSeasons = setOf(Season.SPRING, Season.SUMMER)),
+    GRAPE("Grape", "🍇", "🌱", 468, 960_000L, 1_248, 5, plantSeasons = setOf(Season.SUMMER, Season.FALL)),
+    PUMPKIN("Pumpkin", "🎃", "🌿", 675, 1_320_000L, 1_800, 5, plantSeasons = setOf(Season.SUMMER, Season.FALL)),
+    PEPPER("Pepper", "🫑", "🌿", 972, 1_800_000L, 2_592, 6, plantSeasons = setOf(Season.SUMMER)),
+    PINEAPPLE("Pineapple", "🍍", "🌿", 1_400, 2_400_000L, 3_733, 6, plantSeasons = setOf(Season.SUMMER, Season.FALL)),
+    WATERMELON("Watermelon", "🍉", "🌿", 2_000, 3_240_000L, 5_333, 7, plantSeasons = setOf(Season.SUMMER)),
+    GARLIC("Garlic", "🧄", "🌱", 2_900, 4_500_000L, 7_733, 7, plantSeasons = setOf(Season.FALL, Season.WINTER, Season.SPRING)),
+    KIWI("Kiwi", "🥝", "🌱", 4_200, 6_000_000L, 11_200, 7, plantSeasons = setOf(Season.FALL)),
+    PEANUT("Peanut", "🥜", "🌱", 6_000, 8_100_000L, 16_000, 8, plantSeasons = setOf(Season.SUMMER, Season.FALL)),
+    HOT_PEPPER("Hot Pepper", "🌶️", "🌿", 8_650, 10_800_000L, 23_067, 8, plantSeasons = setOf(Season.SUMMER)),
+    SNAP_PEA("Snap Pea", "🫛", "🌱", 12_500, 14_400_000L, 33_333, 9, plantSeasons = setOf(Season.SPRING, Season.FALL)),
+    SAFFRON("Saffron", "🌸", "🌱", 18_000, 18_000_000L, 48_000, 9, plantSeasons = setOf(Season.FALL)),
+    VANILLA("Vanilla", "🌺", "🌿", 26_000, 21_600_000L, 69_333, 10, plantSeasons = setOf(Season.SUMMER, Season.FALL)),
+    PURPLE_YAM("Purple Yam", "🍠", "🌱", 37_500, 25_200_000L, 100_000, 10, plantSeasons = setOf(Season.SUMMER, Season.FALL)),
+    TRUFFLE("Truffle", "🌰", "🌱", 54_000, 28_800_000L, 144_000, 10, plantSeasons = setOf(Season.FALL, Season.WINTER)),
 }
 
 enum class TreeType(
@@ -71,13 +104,15 @@ enum class TreeType(
     /** If non-null, harvesting deposits the item into the FARM silo
      * (with quality) instead of paying coins. */
     val inventoryItem: ItemType? = null,
+    /** Seasons in which ripe fruit can be collected. */
+    val harvestSeasons: Set<Season> = Season.entries.toSet(),
 ) {
-    APPLE_TREE("Apple Tree", "🌳", "🍎", 500, 3_600_000L, 1_200_000L, 3, 400, 4),
-    PEACH_TREE("Peach Tree", "🌳", "🍑", 1_500, 7_200_000L, 1_800_000L, 4, 1_000, 5),
-    LEMON_TREE("Lemon Tree", "🌲", "🍋", 4_000, 10_800_000L, 2_700_000L, 4, 2_500, 6),
-    MANGO_TREE("Mango Tree", "🌴", "🥭", 12_000, 18_000_000L, 3_600_000L, 5, 6_000, 7),
-    COCONUT_PALM("Coconut Palm", "🌴", "🥥", 35_000, 28_800_000L, 5_760_000L, 5, 15_000, 9),
-    HOP_BINE("Hop Bine", "🌿", "🌿", 250, 7_200_000L, 1_800_000L, 4, 0, 3, ItemType.HOPS_CASCADE),
+    APPLE_TREE("Apple Tree", "🌳", "🍎", 500, 3_600_000L, 1_200_000L, 3, 400, 4, harvestSeasons = setOf(Season.FALL)),
+    PEACH_TREE("Peach Tree", "🌳", "🍑", 1_500, 7_200_000L, 1_800_000L, 4, 1_000, 5, harvestSeasons = setOf(Season.SUMMER)),
+    LEMON_TREE("Lemon Tree", "🌲", "🍋", 4_000, 10_800_000L, 2_700_000L, 4, 2_500, 6, harvestSeasons = setOf(Season.WINTER, Season.SPRING)),
+    MANGO_TREE("Mango Tree", "🌴", "🥭", 12_000, 18_000_000L, 3_600_000L, 5, 6_000, 7, harvestSeasons = setOf(Season.SUMMER)),
+    COCONUT_PALM("Coconut Palm", "🌴", "🥥", 35_000, 28_800_000L, 5_760_000L, 5, 15_000, 9, harvestSeasons = setOf(Season.SUMMER, Season.FALL)),
+    HOP_BINE("Hop Bine", "🌿", "🌿", 250, 7_200_000L, 1_800_000L, 4, 0, 3, ItemType.HOPS_CASCADE, setOf(Season.SUMMER, Season.FALL)),
 }
 
 /** Roll a quality score for a freshly harvested crop or fruit. */
@@ -126,6 +161,20 @@ data class Plot(
     fun treeLifeFraction(nowMs: Long): Float {
         val t = tree ?: return 0f
         return ((nowMs - plantedAtMs).toFloat() / t.lifeMs).coerceIn(0f, 1f)
+    }
+
+    /** True if this planted crop has survived two seasons past its last planting season. */
+    fun isCropDead(currentSeason: Season): Boolean {
+        val c = crop ?: return false
+        if (kind != PlotKind.PLANTED) return false
+        return Season.seasonsSinceLastPlantable(currentSeason, c.plantSeasons) >= 2
+    }
+
+    /** True when a harvest window is open but the current season isn't a harvest season. */
+    fun treeReadyWrongSeason(nowMs: Long, currentSeason: Season): Boolean {
+        val t = tree ?: return false
+        return !treeIsDead(nowMs) && treeWindowsDue(nowMs) > harvestCount &&
+            currentSeason !in t.harvestSeasons
     }
 }
 
@@ -230,6 +279,15 @@ class FarmGame(context: Context) {
 
     private fun handlePlant(s: FarmState, idx: Int, now: Long) {
         val crop = s.selectedSeed
+        val currentSeason = Season.current()
+        if (currentSeason !in crop.plantSeasons) {
+            val seasonOrder = listOf(Season.SPRING, Season.SUMMER, Season.FALL, Season.WINTER)
+            val seasons = crop.plantSeasons
+                .sortedBy { seasonOrder.indexOf(it) }
+                .joinToString(", ") { "${it.emoji} ${it.displayName}" }
+            fail("${crop.displayName} only grows in $seasons.")
+            return
+        }
         if (s.coins < crop.coinCost) { fail("Need 🪙${crop.coinCost}"); return }
         if (s.energy < crop.plantEnergy) { fail("Need ⚡${crop.plantEnergy}"); return }
         val growthSpeedLvl = s.upgradeLevels["growthSpeed"] ?: 0
@@ -250,6 +308,13 @@ class FarmGame(context: Context) {
 
     private fun handlePlanted(s: FarmState, idx: Int, p: Plot, now: Long) {
         val crop = p.crop ?: return
+        val currentSeason = Season.current()
+        if (p.isCropDead(currentSeason)) {
+            state = s.copy(plots = s.plots.replaceAt(idx, Plot(kind = PlotKind.TILLED)))
+            note("Cleared the dead ${crop.displayName.lowercase()} 💀")
+            save()
+            return
+        }
         when {
             p.isReady(now) -> {
                 if (s.energy < ENERGY_HARVEST) { fail("Need ⚡$ENERGY_HARVEST"); return }
@@ -336,11 +401,19 @@ class FarmGame(context: Context) {
 
     private fun handleTreeTap(s: FarmState, idx: Int, p: Plot, now: Long) {
         val tree = p.tree ?: return
+        val currentSeason = Season.current()
+        val seasonOrder = listOf(Season.SPRING, Season.SUMMER, Season.FALL, Season.WINTER)
         when {
             p.treeIsDead(now) -> {
                 state = s.copy(plots = s.plots.replaceAt(idx, Plot()))
                 note("Removed the dead ${tree.displayName.lowercase()}.")
                 save()
+            }
+            p.treeReadyWrongSeason(now, currentSeason) -> {
+                val seasons = tree.harvestSeasons
+                    .sortedBy { seasonOrder.indexOf(it) }
+                    .joinToString(", ") { "${it.emoji} ${it.displayName}" }
+                note("${tree.displayName} ripens in $seasons. Waiting for the right season.")
             }
             p.treeHarvestReady(now) -> {
                 if (s.energy < ENERGY_HARVEST) { fail("Need ⚡$ENERGY_HARVEST"); return }
