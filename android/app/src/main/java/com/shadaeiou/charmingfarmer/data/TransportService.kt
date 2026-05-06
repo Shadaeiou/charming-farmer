@@ -52,12 +52,18 @@ data class Trip(
     val startMs: Long,
     val durationMs: Long,
 ) {
-    fun progress(nowMs: Long): Float =
-        ((nowMs - startMs).toFloat() / durationMs).coerceIn(0f, 1f)
+    fun progress(nowMs: Long): Float {
+        if (DebugSettings.skipTimers) return 1f
+        return ((nowMs - startMs).toFloat() / durationMs).coerceIn(0f, 1f)
+    }
 
-    fun isComplete(nowMs: Long): Boolean = nowMs - startMs >= durationMs
+    fun isComplete(nowMs: Long): Boolean =
+        DebugSettings.skipTimers || nowMs - startMs >= durationMs
 
-    fun remainingMs(nowMs: Long): Long = (startMs + durationMs - nowMs).coerceAtLeast(0)
+    fun remainingMs(nowMs: Long): Long {
+        if (DebugSettings.skipTimers) return 0L
+        return (startMs + durationMs - nowMs).coerceAtLeast(0)
+    }
 }
 
 /**

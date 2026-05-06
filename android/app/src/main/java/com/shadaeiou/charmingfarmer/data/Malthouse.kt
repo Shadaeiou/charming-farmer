@@ -44,12 +44,18 @@ data class KilnRun(
     val profile: KilnProfile,
     val startMs: Long,
 ) {
-    fun progress(nowMs: Long): Float =
-        ((nowMs - startMs).toFloat() / profile.durationMs).coerceIn(0f, 1f)
+    fun progress(nowMs: Long): Float {
+        if (DebugSettings.skipTimers) return 1f
+        return ((nowMs - startMs).toFloat() / profile.durationMs).coerceIn(0f, 1f)
+    }
 
-    fun isComplete(nowMs: Long): Boolean = nowMs - startMs >= profile.durationMs
+    fun isComplete(nowMs: Long): Boolean =
+        DebugSettings.skipTimers || nowMs - startMs >= profile.durationMs
 
-    fun remainingMs(nowMs: Long): Long = (startMs + profile.durationMs - nowMs).coerceAtLeast(0)
+    fun remainingMs(nowMs: Long): Long {
+        if (DebugSettings.skipTimers) return 0L
+        return (startMs + profile.durationMs - nowMs).coerceAtLeast(0)
+    }
 }
 
 /**

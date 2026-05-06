@@ -145,7 +145,11 @@ fun FishingScreen(onBack: () -> Unit, onOpenMap: () -> Unit) {
             return
         }
         val now = System.currentTimeMillis()
-        biteAtMs = now + Random.nextLong(MIN_CAST_WAIT_MS, MAX_CAST_WAIT_MS)
+        biteAtMs = if (com.shadaeiou.charmingfarmer.data.DebugSettings.skipTimers) {
+            now
+        } else {
+            now + Random.nextLong(MIN_CAST_WAIT_MS, MAX_CAST_WAIT_MS)
+        }
         biteUntilMs = 0L
         phase = CastPhase.WAITING
         feedback = "Line cast. Watch the water…"

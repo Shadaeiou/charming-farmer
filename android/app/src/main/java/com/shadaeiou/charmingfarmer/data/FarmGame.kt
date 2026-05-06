@@ -100,6 +100,7 @@ data class Plot(
 ) {
     fun growthFraction(nowMs: Long): Float {
         if (kind != PlotKind.PLANTED || crop == null) return 0f
+        if (DebugSettings.skipTimers) return 1f
         val elapsed = nowMs - plantedAtMs + bonusMs
         return (elapsed.toFloat() / crop.growthMs).coerceIn(0f, 1f)
     }
@@ -110,6 +111,7 @@ data class Plot(
 
     fun treeWindowsDue(nowMs: Long): Int {
         val t = tree ?: return 0
+        if (DebugSettings.skipTimers) return t.maxHarvests
         return ((nowMs - plantedAtMs) / t.harvestIntervalMs).toInt().coerceAtMost(t.maxHarvests)
     }
 
@@ -456,6 +458,15 @@ class FarmGame(context: Context) {
     fun spendEnergy(amount: Int): Boolean {
         tick()
         val s = state
+        if (DebugSettings.infiniteEnergy) {
+            // Don't actually subtract — also keep the bar pinned to max
+            // so the player sees "infinite" rather than a slow drain back.
+            if (s.energy < s.maxEnergy) {
+                state = s.copy(energy = s.maxEnergy.toFloat())
+                save()
+            }
+            return true
+        }
         if (s.energy < amount) return false
         state = s.copy(energy = s.energy - amount)
         save()

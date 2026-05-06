@@ -2,6 +2,7 @@ package com.shadaeiou.charmingfarmer.ui
 
 import androidx.compose.foundation.layout.Arrangement
 import androidx.compose.foundation.layout.Column
+import androidx.compose.foundation.layout.Row
 import androidx.compose.foundation.layout.Spacer
 import androidx.compose.foundation.layout.fillMaxSize
 import androidx.compose.foundation.layout.fillMaxWidth
@@ -19,24 +20,30 @@ import androidx.compose.material3.HorizontalDivider
 import androidx.compose.material3.Icon
 import androidx.compose.material3.IconButton
 import androidx.compose.material3.MaterialTheme
+import androidx.compose.material3.OutlinedButton
 import androidx.compose.material3.Scaffold
+import androidx.compose.material3.Switch
 import androidx.compose.material3.Text
 import androidx.compose.material3.TextButton
 import androidx.compose.material3.TopAppBar
 import androidx.compose.runtime.Composable
+import androidx.compose.runtime.LaunchedEffect
 import androidx.compose.runtime.getValue
 import androidx.compose.runtime.mutableStateOf
 import androidx.compose.runtime.remember
 import androidx.compose.runtime.rememberCoroutineScope
 import androidx.compose.runtime.saveable.rememberSaveable
 import androidx.compose.runtime.setValue
+import androidx.compose.ui.Alignment
 import androidx.compose.ui.Modifier
 import androidx.compose.ui.platform.LocalContext
 import androidx.compose.ui.text.style.TextAlign
 import androidx.compose.ui.unit.dp
 import com.shadaeiou.charmingfarmer.BuildConfig
 import com.shadaeiou.charmingfarmer.data.CHANGELOG
+import com.shadaeiou.charmingfarmer.data.DebugSettings
 import com.shadaeiou.charmingfarmer.data.DownloadResult
+import com.shadaeiou.charmingfarmer.data.FarmGame
 import com.shadaeiou.charmingfarmer.data.ReleaseNote
 import com.shadaeiou.charmingfarmer.data.UpdateInfo
 import com.shadaeiou.charmingfarmer.data.Updater
@@ -186,9 +193,106 @@ fun SettingsScreen(onBack: () -> Unit, onOpenMap: () -> Unit) {
                 modifier = Modifier.fillMaxWidth(),
                 textAlign = TextAlign.Center,
             )
-            Spacer(Modifier.height(8.dp))
+            Spacer(Modifier.height(16.dp))
+            HorizontalDivider()
+            Spacer(Modifier.height(16.dp))
+
+            DebugSection()
+
+            Spacer(Modifier.height(16.dp))
+            HorizontalDivider()
+            Spacer(Modifier.height(16.dp))
+
             ChangelogSection()
         }
+    }
+}
+
+@Composable
+private fun DebugSection() {
+    val ctx = LocalContext.current
+    // Make sure DebugSettings has loaded its persisted values before
+    // we render the toggles.
+    LaunchedEffect(Unit) { DebugSettings.init(ctx.applicationContext) }
+    val game = remember { FarmGame(ctx.applicationContext) }
+
+    Text("🐛 Debug", style = MaterialTheme.typography.titleMedium)
+    Spacer(Modifier.height(4.dp))
+    Text(
+        "Testing tools — flip on to play through the game without waiting on real-time clocks.",
+        style = MaterialTheme.typography.labelSmall,
+        color = MaterialTheme.colorScheme.onSurfaceVariant,
+    )
+    Spacer(Modifier.height(12.dp))
+
+    DebugToggleRow(
+        title = "Skip timers",
+        description = "Crops grow instantly, kilns finish on start, transport trips arrive on dispatch, fish bite the moment you cast.",
+        checked = DebugSettings.skipTimers,
+        onChange = { DebugSettings.setSkipTimers(it) },
+    )
+    Spacer(Modifier.height(8.dp))
+    DebugToggleRow(
+        title = "Infinite energy",
+        description = "Actions never deplete the energy bar; it stays pinned at max while this is on.",
+        checked = DebugSettings.infiniteEnergy,
+        onChange = { DebugSettings.setInfiniteEnergy(it) },
+    )
+
+    Spacer(Modifier.height(12.dp))
+    Row(horizontalArrangement = Arrangement.spacedBy(8.dp)) {
+        OutlinedButton(
+            onClick = { game.addCoins(10_000) },
+            modifier = Modifier.weight(1f),
+        ) { Text("+ 🪙10,000") }
+        OutlinedButton(
+            onClick = { game.addCoins(100_000) },
+            modifier = Modifier.weight(1f),
+        ) { Text("+ 🪙100,000") }
+    }
+
+    Spacer(Modifier.height(8.dp))
+    var resetConfirm by remember { mutableStateOf(false) }
+    OutlinedButton(
+        onClick = { resetConfirm = true },
+        modifier = Modifier.fillMaxWidth(),
+    ) { Text("Reset farm (plots + upgrades)") }
+
+    if (resetConfirm) {
+        AlertDialog(
+            onDismissRequest = { resetConfirm = false },
+            title = { Text("Reset the farm?") },
+            text = { Text("Clears all plots, upgrades, energy, and coins back to a fresh start. Silos, malthouse, and bird sightings stay intact.") },
+            confirmButton = {
+                TextButton(onClick = {
+                    game.reset()
+                    resetConfirm = false
+                }) { Text("Reset") }
+            },
+            dismissButton = {
+                TextButton(onClick = { resetConfirm = false }) { Text("Cancel") }
+            },
+        )
+    }
+}
+
+@Composable
+private fun DebugToggleRow(
+    title: String,
+    description: String,
+    checked: Boolean,
+    onChange: (Boolean) -> Unit,
+) {
+    Row(verticalAlignment = Alignment.CenterVertically) {
+        Column(modifier = Modifier.weight(1f)) {
+            Text(title, style = MaterialTheme.typography.bodyMedium)
+            Text(
+                description,
+                style = MaterialTheme.typography.labelSmall,
+                color = MaterialTheme.colorScheme.onSurfaceVariant,
+            )
+        }
+        Switch(checked = checked, onCheckedChange = onChange)
     }
 }
 
