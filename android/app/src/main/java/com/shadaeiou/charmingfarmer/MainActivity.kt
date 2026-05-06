@@ -26,6 +26,7 @@ import com.shadaeiou.charmingfarmer.ui.BirdwatchingScreen
 import com.shadaeiou.charmingfarmer.ui.FarmerTheme
 import com.shadaeiou.charmingfarmer.ui.FishingScreen
 import com.shadaeiou.charmingfarmer.ui.HomeScreen
+import com.shadaeiou.charmingfarmer.ui.MalthouseScreen
 import com.shadaeiou.charmingfarmer.ui.MapScreen
 import com.shadaeiou.charmingfarmer.ui.SettingsScreen
 import kotlinx.coroutines.CoroutineScope
@@ -170,6 +171,10 @@ private fun Root() {
                     saveLastDest("birds")
                     nav.navigate("birds") { popUpTo("map") { inclusive = true } }
                 },
+                onGoToMalthouse = {
+                    saveLastDest("malthouse")
+                    nav.navigate("malthouse") { popUpTo("map") { inclusive = true } }
+                },
                 onClose = { nav.popBackStack() },
             )
         }
@@ -183,6 +188,13 @@ private fun Root() {
         composable("birds") {
             saveLastDest("birds")
             BirdwatchingScreen(
+                onBack = { nav.popBackStack() },
+                onOpenMap = { nav.navigate("map") },
+            )
+        }
+        composable("malthouse") {
+            saveLastDest("malthouse")
+            MalthouseScreen(
                 onBack = { nav.popBackStack() },
                 onOpenMap = { nav.navigate("map") },
             )

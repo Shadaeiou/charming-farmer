@@ -93,16 +93,31 @@ private val ReadyColor = Color(0xFFFFD24A)
 fun HomeScreen(onOpenSettings: () -> Unit, onOpenMap: () -> Unit) {
     val ctx = LocalContext.current
     val game = remember { FarmGame(ctx.applicationContext) }
+    val transport = remember { com.shadaeiou.charmingfarmer.data.TransportService.get(ctx.applicationContext) }
     var nowMs by remember { mutableLongStateOf(System.currentTimeMillis()) }
+    var transportOpen by remember { mutableStateOf(false) }
 
     LaunchedEffect(Unit) {
         while (true) {
             game.tick()
+            transport.tick(System.currentTimeMillis())
             nowMs = System.currentTimeMillis()
             delay(250)
         }
     }
     DisposableEffect(Unit) { onDispose { game.save() } }
+
+    if (transportOpen) {
+        TransportPanel(
+            transport = transport,
+            origin = com.shadaeiou.charmingfarmer.data.Location.FARM,
+            allowedDestinations = listOf(
+                com.shadaeiou.charmingfarmer.data.Location.MALTHOUSE,
+                com.shadaeiou.charmingfarmer.data.Location.BREWERY,
+            ),
+            onDismiss = { transportOpen = false },
+        )
+    }
 
     val state = game.state
 
@@ -111,6 +126,12 @@ fun HomeScreen(onOpenSettings: () -> Unit, onOpenMap: () -> Unit) {
             TopAppBar(
                 title = { Text("🌾 Charming Farmer", fontWeight = FontWeight.Bold) },
                 actions = {
+                    IconButton(onClick = { transportOpen = true }) {
+                        Icon(
+                            androidx.compose.material.icons.Icons.Filled.LocalShipping,
+                            contentDescription = "Transport",
+                        )
+                    }
                     IconButton(onClick = onOpenSettings) {
                         Icon(Icons.Filled.Settings, contentDescription = "Settings")
                     }

@@ -8,6 +8,17 @@ data class ReleaseNote(
 
 val CHANGELOG: List<ReleaseNote> = listOf(
     ReleaseNote(
+        version = "0.1.29",
+        date = "2026-05-06",
+        bullets = listOf(
+            "New atlas destination: 🌾 Malthouse. Ship grain from the farm and kiln it into pale, Munich, crystal, chocolate, or black malt — each profile takes longer and shifts the score differently",
+            "🚚 Transport panel on the farm and malthouse top bars: pick a cargo, pick a destination, watch the wheelbarrow roll. Routes are generic so future locations plug in",
+            "Four new grain crops on the farm — Barley, Wheat (grain), Oats, Rye — plus a perennial Hop Bine. They harvest into your silo with a quality score and a tier roll instead of paying coins",
+            "Universal quality system: every produced or processed item carries a 0-100 score (Grade S/A/B/C/D/F) and a rare-roll Tier (Mega ✨ / Golden 💛 / Perfect 🏆) that boosts sale prices",
+            "Save data moved to a real database (Room) — same farm, same fish, same birds; the schema is now built to grow without breaking older saves",
+        ),
+    ),
+    ReleaseNote(
         version = "0.1.23",
         date = "2026-05-05",
         bullets = listOf(

@@ -52,6 +52,7 @@ fun MapScreen(
     onGoToFarm: () -> Unit,
     onGoToPond: () -> Unit,
     onGoToBirds: () -> Unit,
+    onGoToMalthouse: () -> Unit,
     onClose: () -> Unit,
 ) {
     val context = LocalContext.current
@@ -63,6 +64,8 @@ fun MapScreen(
         Destination("🌾", "Farm", "Till dirt, plant seeds, raise trees, harvest the works.", true, onGoToFarm),
         Destination("🎣", "Pond", "Cast a line, time the bite, reel in ten kinds of fish.", true, onGoToPond),
         Destination("🦜", "Birdwatching", "Spot rare birds as they fly past and add them to your field notes.", true, onGoToBirds),
+        Destination("🌾", "Malthouse", "Steep, germinate, and kiln your grain into pale, crystal, chocolate or black malt.", true, onGoToMalthouse),
+        Destination("🍺", "Brewery", "Mash, boil, ferment, bottle. Recipes only succeed with the right malt and hops.", false, comingSoon),
         Destination("🐝", "Apiary", "Tend hives, harvest jars of honey, breed rarer bees over time.", false, comingSoon),
         Destination("🐄", "Livestock", "Feed cows, sheep, and chickens for steady milk, wool, and eggs.", false, comingSoon),
         Destination("⛏️", "Mine", "Swing a pickaxe through stone for ore, gems, and rare relics.", false, comingSoon),

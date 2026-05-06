@@ -12,6 +12,8 @@ import androidx.room.Query
 import androidx.room.Room
 import androidx.room.RoomDatabase
 import androidx.room.Transaction
+import androidx.room.migration.Migration
+import androidx.sqlite.db.SupportSQLiteDatabase
 
 /**
  * Schema version 1 — mirrors the data we currently persist across the
@@ -109,6 +111,20 @@ data class TransportTripEntity(
 data class SystemMetaEntity(
     @PrimaryKey val key: String,
     val value: String,
+)
+
+/**
+ * One row per kilning run currently underway in the malthouse. Schema
+ * added in v2; v1 installs migrate via [MIGRATION_1_2].
+ */
+@Entity(tableName = "kiln_runs")
+data class KilnRunEntity(
+    @PrimaryKey val id: Long,
+    @ColumnInfo(name = "input_type") val inputType: String,
+    @ColumnInfo(name = "input_score") val inputScore: Int,
+    @ColumnInfo(name = "input_tier") val inputTier: String,
+    val profile: String,
+    @ColumnInfo(name = "start_ms") val startMs: Long,
 )
 
 // -- DAOs -------------------------------------------------------------
@@ -231,6 +247,40 @@ interface SystemMetaDao {
     fun put(key: String, value: String) = put(SystemMetaEntity(key, value))
 }
 
+@Dao
+interface KilnRunDao {
+    @Query("SELECT * FROM kiln_runs")
+    fun getAll(): List<KilnRunEntity>
+
+    @Insert(onConflict = OnConflictStrategy.REPLACE)
+    fun insert(run: KilnRunEntity)
+
+    @Query("DELETE FROM kiln_runs WHERE id = :id")
+    fun deleteById(id: Long)
+
+    @Query("DELETE FROM kiln_runs")
+    fun deleteAll()
+}
+
+// -- Migrations -------------------------------------------------------
+
+val MIGRATION_1_2: Migration = object : Migration(1, 2) {
+    override fun migrate(db: SupportSQLiteDatabase) {
+        db.execSQL(
+            """
+            CREATE TABLE IF NOT EXISTS kiln_runs (
+                id INTEGER NOT NULL PRIMARY KEY,
+                input_type TEXT NOT NULL,
+                input_score INTEGER NOT NULL,
+                input_tier TEXT NOT NULL,
+                profile TEXT NOT NULL,
+                start_ms INTEGER NOT NULL
+            )
+            """.trimIndent()
+        )
+    }
+}
+
 // -- Database ---------------------------------------------------------
 
 @Database(
@@ -243,8 +293,9 @@ interface SystemMetaDao {
         VehicleOwnedEntity::class,
         TransportTripEntity::class,
         SystemMetaEntity::class,
+        KilnRunEntity::class,
     ],
-    version = 1,
+    version = 2,
     exportSchema = false,
 )
 abstract class AppDatabase : RoomDatabase() {
@@ -256,6 +307,7 @@ abstract class AppDatabase : RoomDatabase() {
     abstract fun vehicles(): VehicleDao
     abstract fun trips(): TripDao
     abstract fun systemMeta(): SystemMetaDao
+    abstract fun kilnRuns(): KilnRunDao
 
     companion object {
         @Volatile private var instance: AppDatabase? = null
@@ -276,6 +328,7 @@ abstract class AppDatabase : RoomDatabase() {
             // a coroutine scope held on the FarmGame, but at our scale
             // this stays well under a frame.
             Room.databaseBuilder(appContext, AppDatabase::class.java, "charming-farmer.db")
+                .addMigrations(MIGRATION_1_2)
                 .allowMainThreadQueries()
                 .build()
     }
