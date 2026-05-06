@@ -8,6 +8,17 @@ data class ReleaseNote(
 
 val CHANGELOG: List<ReleaseNote> = listOf(
     ReleaseNote(
+        version = "0.1.43",
+        date = "2026-05-06",
+        bullets = listOf(
+            "🗺️ The atlas is gone — replaced by an interactive pixel-style world map showing the actual land you own",
+            "Your existing buildings (House, Farm, Pond, Birdwatching, Malthouse, Brewery) appear pre-placed around the origin",
+            "Tap a tile with a building to enter it, same as before",
+            "Wild land beyond your border shows as grass, water, hills, forest, and dirt — terrain is the same every visit thanks to a coordinate-keyed biome generator",
+            "World map is now the default home screen on first launch; existing players resume on whatever they were doing",
+        ),
+    ),
+    ReleaseNote(
         version = "0.1.40",
         date = "2026-05-06",
         bullets = listOf(

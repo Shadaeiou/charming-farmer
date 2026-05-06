@@ -28,8 +28,8 @@ import com.shadaeiou.charmingfarmer.ui.FarmerTheme
 import com.shadaeiou.charmingfarmer.ui.FishingScreen
 import com.shadaeiou.charmingfarmer.ui.HomeScreen
 import com.shadaeiou.charmingfarmer.ui.MalthouseScreen
-import com.shadaeiou.charmingfarmer.ui.MapScreen
 import com.shadaeiou.charmingfarmer.ui.SettingsScreen
+import com.shadaeiou.charmingfarmer.ui.WorldMapScreen
 import kotlinx.coroutines.CoroutineScope
 import kotlinx.coroutines.Dispatchers
 import kotlinx.coroutines.SupervisorJob
@@ -139,7 +139,9 @@ private fun Root() {
     // Last-visited screen used to live in its own SharedPreferences blob;
     // it now rides along in system_meta so storage is fully unified.
     val db = remember { com.shadaeiou.charmingfarmer.data.room.AppDatabase.get(context.applicationContext) }
-    val startDest = db.systemMeta().get(KEY_LAST_DEST_META) ?: "home"
+    // World map is the new home base for fresh installs. Existing players
+    // resume on whichever screen they left.
+    val startDest = db.systemMeta().get(KEY_LAST_DEST_META) ?: "map"
 
     fun saveLastDest(dest: String) {
         db.systemMeta().put(KEY_LAST_DEST_META, dest)
@@ -162,28 +164,12 @@ private fun Root() {
         }
         composable("map") {
             saveLastDest("map")
-            MapScreen(
-                onGoToFarm = {
-                    saveLastDest("home")
-                    nav.navigate("home") { popUpTo("map") { inclusive = true } }
+            WorldMapScreen(
+                onNavigate = { route ->
+                    saveLastDest(route)
+                    nav.navigate(route)
                 },
-                onGoToPond = {
-                    saveLastDest("pond")
-                    nav.navigate("pond") { popUpTo("map") { inclusive = true } }
-                },
-                onGoToBirds = {
-                    saveLastDest("birds")
-                    nav.navigate("birds") { popUpTo("map") { inclusive = true } }
-                },
-                onGoToMalthouse = {
-                    saveLastDest("malthouse")
-                    nav.navigate("malthouse") { popUpTo("map") { inclusive = true } }
-                },
-                onGoToBrewery = {
-                    saveLastDest("brewery")
-                    nav.navigate("brewery") { popUpTo("map") { inclusive = true } }
-                },
-                onClose = { nav.popBackStack() },
+                onOpenSettings = { nav.navigate("settings") },
             )
         }
         composable("pond") {
