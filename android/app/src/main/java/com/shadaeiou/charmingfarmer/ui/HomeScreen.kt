@@ -30,6 +30,7 @@ import androidx.compose.foundation.layout.width
 import androidx.compose.foundation.rememberScrollState
 import androidx.compose.foundation.shape.RoundedCornerShape
 import androidx.compose.material.icons.Icons
+import androidx.compose.material.icons.filled.LocalShipping
 import androidx.compose.material.icons.filled.Map
 import androidx.compose.material.icons.filled.Settings
 import androidx.compose.material3.Card
@@ -127,10 +128,7 @@ fun HomeScreen(onOpenSettings: () -> Unit, onOpenMap: () -> Unit) {
                 title = { Text("🌾 Charming Farmer", fontWeight = FontWeight.Bold) },
                 actions = {
                     IconButton(onClick = { transportOpen = true }) {
-                        Icon(
-                            androidx.compose.material.icons.Icons.Filled.LocalShipping,
-                            contentDescription = "Transport",
-                        )
+                        Icon(Icons.Filled.LocalShipping, contentDescription = "Transport")
                     }
                     IconButton(onClick = onOpenSettings) {
                         Icon(Icons.Filled.Settings, contentDescription = "Settings")
