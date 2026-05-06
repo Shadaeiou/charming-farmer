@@ -1,0 +1,282 @@
+package com.shadaeiou.charmingfarmer.data.room
+
+import android.content.Context
+import androidx.room.ColumnInfo
+import androidx.room.Dao
+import androidx.room.Database
+import androidx.room.Entity
+import androidx.room.Insert
+import androidx.room.OnConflictStrategy
+import androidx.room.PrimaryKey
+import androidx.room.Query
+import androidx.room.Room
+import androidx.room.RoomDatabase
+import androidx.room.Transaction
+
+/**
+ * Schema version 1 — mirrors the data we currently persist across the
+ * three SharedPreferences blobs. Every entity uses TEXT for enum names
+ * so adding/removing/renaming an enum value never crashes the load:
+ * the DAOs return raw strings, the in-memory model decides whether to
+ * accept them.
+ *
+ * Why entities instead of a single big JSON blob:
+ *   - Inventories grow without bound; row-per-stack lets us query with
+ *     SQL ("biggest stack of barley", "all bottles aged > 7 days")
+ *     instead of deserialising everything every action.
+ *   - Atomic multi-table updates via @Transaction: shipping cargo
+ *     subtracts from origin AND adds to destination AND inserts the
+ *     trip in one commit, so we can never half-fail.
+ *   - Schema migrations are versioned by Room; the CLAUDE.md
+ *     "never break saves" rule becomes structurally enforced when we
+ *     bump VERSION = 2.
+ */
+
+// -- Entities ---------------------------------------------------------
+
+/** Singleton row holding all the FarmState scalars. id is always 1. */
+@Entity(tableName = "game_state")
+data class GameStateEntity(
+    @PrimaryKey val id: Int = SINGLETON_ID,
+    val energy: Float,
+    @ColumnInfo(name = "max_energy") val maxEnergy: Int,
+    @ColumnInfo(name = "regen_ms") val regenMs: Long,
+    @ColumnInfo(name = "last_tick_ms") val lastTickMs: Long,
+    val coins: Int,
+    val harvested: Int,
+    @ColumnInfo(name = "selected_seed") val selectedSeed: String,
+    @ColumnInfo(name = "selected_tree") val selectedTree: String?,
+) {
+    companion object {
+        const val SINGLETON_ID = 1
+    }
+}
+
+/** One row per plot position (0..PLOT_COUNT - 1). */
+@Entity(tableName = "plots")
+data class PlotEntity(
+    @PrimaryKey val position: Int,
+    val kind: String,
+    val crop: String?,
+    val tree: String?,
+    @ColumnInfo(name = "planted_at_ms") val plantedAtMs: Long,
+    val watered: Boolean,
+    @ColumnInfo(name = "bonus_ms") val bonusMs: Long,
+    @ColumnInfo(name = "harvest_count") val harvestCount: Int,
+)
+
+@Entity(tableName = "upgrade_levels")
+data class UpgradeLevelEntity(
+    @PrimaryKey val key: String,
+    val level: Int,
+)
+
+@Entity(tableName = "birds_seen")
+data class BirdSeenEntity(
+    @PrimaryKey @ColumnInfo(name = "species_key") val speciesKey: String,
+    val count: Int,
+)
+
+@Entity(tableName = "inventory_stacks")
+data class InventoryStackEntity(
+    @PrimaryKey(autoGenerate = true) val id: Long = 0L,
+    val location: String,
+    val type: String,
+    val quantity: Int,
+    val score: Int,
+    val tier: String,
+    @ColumnInfo(name = "created_ms") val createdMs: Long,
+)
+
+@Entity(tableName = "vehicles_owned")
+data class VehicleOwnedEntity(
+    @PrimaryKey val vehicle: String,
+)
+
+@Entity(tableName = "transport_trips")
+data class TransportTripEntity(
+    @PrimaryKey val id: Long,
+    val vehicle: String,
+    val origin: String,
+    val destination: String,
+    @ColumnInfo(name = "cargo_json") val cargoJson: String,
+    @ColumnInfo(name = "start_ms") val startMs: Long,
+    @ColumnInfo(name = "duration_ms") val durationMs: Long,
+)
+
+/** Generic key/value table for migration markers, counters, etc. */
+@Entity(tableName = "system_meta")
+data class SystemMetaEntity(
+    @PrimaryKey val key: String,
+    val value: String,
+)
+
+// -- DAOs -------------------------------------------------------------
+
+@Dao
+interface GameStateDao {
+    @Query("SELECT * FROM game_state WHERE id = :id LIMIT 1")
+    fun getOrNull(id: Int = GameStateEntity.SINGLETON_ID): GameStateEntity?
+
+    @Insert(onConflict = OnConflictStrategy.REPLACE)
+    fun upsert(state: GameStateEntity)
+}
+
+@Dao
+interface PlotDao {
+    @Query("SELECT * FROM plots ORDER BY position")
+    fun getAll(): List<PlotEntity>
+
+    @Insert(onConflict = OnConflictStrategy.REPLACE)
+    fun upsert(plot: PlotEntity)
+
+    @Insert(onConflict = OnConflictStrategy.REPLACE)
+    fun upsertAll(plots: List<PlotEntity>)
+}
+
+@Dao
+interface UpgradeLevelDao {
+    @Query("SELECT * FROM upgrade_levels")
+    fun getAll(): List<UpgradeLevelEntity>
+
+    @Insert(onConflict = OnConflictStrategy.REPLACE)
+    fun upsert(entity: UpgradeLevelEntity)
+
+    @Insert(onConflict = OnConflictStrategy.REPLACE)
+    fun upsertAll(entities: List<UpgradeLevelEntity>)
+}
+
+@Dao
+interface BirdSeenDao {
+    @Query("SELECT * FROM birds_seen")
+    fun getAll(): List<BirdSeenEntity>
+
+    @Query("SELECT count FROM birds_seen WHERE species_key = :key LIMIT 1")
+    fun getCount(key: String): Int?
+
+    @Insert(onConflict = OnConflictStrategy.REPLACE)
+    fun upsert(entity: BirdSeenEntity)
+
+    @Insert(onConflict = OnConflictStrategy.REPLACE)
+    fun upsertAll(entities: List<BirdSeenEntity>)
+}
+
+@Dao
+interface InventoryDao {
+    @Query("SELECT * FROM inventory_stacks WHERE location = :location")
+    fun getForLocation(location: String): List<InventoryStackEntity>
+
+    @Query("SELECT * FROM inventory_stacks")
+    fun getAll(): List<InventoryStackEntity>
+
+    @Insert(onConflict = OnConflictStrategy.REPLACE)
+    fun insert(entity: InventoryStackEntity): Long
+
+    @Insert(onConflict = OnConflictStrategy.REPLACE)
+    fun insertAll(entities: List<InventoryStackEntity>)
+
+    @Query("DELETE FROM inventory_stacks WHERE location = :location")
+    fun deleteForLocation(location: String)
+
+    @Query("DELETE FROM inventory_stacks")
+    fun deleteAll()
+
+    /**
+     * Atomic replace of the entire inventory at a single location. Used
+     * when the in-memory Inventory has been recomputed (e.g. after a
+     * remove() that pulled from multiple stacks).
+     */
+    @Transaction
+    fun replaceForLocation(location: String, entities: List<InventoryStackEntity>) {
+        deleteForLocation(location)
+        if (entities.isNotEmpty()) insertAll(entities)
+    }
+}
+
+@Dao
+interface VehicleDao {
+    @Query("SELECT vehicle FROM vehicles_owned")
+    fun getAll(): List<String>
+
+    @Insert(onConflict = OnConflictStrategy.REPLACE)
+    fun insert(entity: VehicleOwnedEntity)
+
+    @Insert(onConflict = OnConflictStrategy.REPLACE)
+    fun insertAll(entities: List<VehicleOwnedEntity>)
+}
+
+@Dao
+interface TripDao {
+    @Query("SELECT * FROM transport_trips")
+    fun getAll(): List<TransportTripEntity>
+
+    @Insert(onConflict = OnConflictStrategy.REPLACE)
+    fun insert(entity: TransportTripEntity)
+
+    @Query("DELETE FROM transport_trips WHERE id = :id")
+    fun deleteById(id: Long)
+
+    @Query("DELETE FROM transport_trips")
+    fun deleteAll()
+}
+
+@Dao
+interface SystemMetaDao {
+    @Query("SELECT value FROM system_meta WHERE key = :key LIMIT 1")
+    fun get(key: String): String?
+
+    @Insert(onConflict = OnConflictStrategy.REPLACE)
+    fun put(entity: SystemMetaEntity)
+
+    fun put(key: String, value: String) = put(SystemMetaEntity(key, value))
+}
+
+// -- Database ---------------------------------------------------------
+
+@Database(
+    entities = [
+        GameStateEntity::class,
+        PlotEntity::class,
+        UpgradeLevelEntity::class,
+        BirdSeenEntity::class,
+        InventoryStackEntity::class,
+        VehicleOwnedEntity::class,
+        TransportTripEntity::class,
+        SystemMetaEntity::class,
+    ],
+    version = 1,
+    exportSchema = false,
+)
+abstract class AppDatabase : RoomDatabase() {
+    abstract fun gameState(): GameStateDao
+    abstract fun plots(): PlotDao
+    abstract fun upgradeLevels(): UpgradeLevelDao
+    abstract fun birdsSeen(): BirdSeenDao
+    abstract fun inventory(): InventoryDao
+    abstract fun vehicles(): VehicleDao
+    abstract fun trips(): TripDao
+    abstract fun systemMeta(): SystemMetaDao
+
+    companion object {
+        @Volatile private var instance: AppDatabase? = null
+
+        fun get(context: Context): AppDatabase {
+            val existing = instance
+            if (existing != null) return existing
+            return synchronized(this) {
+                instance ?: build(context.applicationContext).also { instance = it }
+            }
+        }
+
+        private fun build(appContext: Context): AppDatabase =
+            // allowMainThreadQueries is intentional — FarmGame loads its
+            // state synchronously in init for Compose, and individual
+            // saves are short single-row writes. If save latency ever
+            // becomes noticeable we'll move writes to Dispatchers.IO via
+            // a coroutine scope held on the FarmGame, but at our scale
+            // this stays well under a frame.
+            Room.databaseBuilder(appContext, AppDatabase::class.java, "charming-farmer.db")
+                .allowMainThreadQueries()
+                .build()
+    }
+}
