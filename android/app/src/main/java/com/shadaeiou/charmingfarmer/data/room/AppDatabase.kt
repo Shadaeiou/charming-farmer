@@ -146,6 +146,25 @@ data class BrewBatchEntity(
     @ColumnInfo(name = "ingredient_tier") val ingredientTier: String,
 )
 
+/**
+ * One row per OWNED tile in the world map. Unowned tiles are virtual
+ * — they're computed on demand from a deterministic biome function
+ * keyed on (x, y), so an infinite map costs zero storage until the
+ * player buys land. Schema added in v4.
+ *
+ * Composite primary key (x, y) — Room supports this via the
+ * primaryKeys array on @Entity.
+ */
+@Entity(tableName = "land_tiles", primaryKeys = ["x", "y"])
+data class LandTileEntity(
+    val x: Int,
+    val y: Int,
+    @ColumnInfo(name = "owned_at_ms") val ownedAtMs: Long?,
+    val structure: String?,
+    @ColumnInfo(name = "build_started_ms") val buildStartedMs: Long?,
+    @ColumnInfo(name = "build_duration_ms") val buildDurationMs: Long?,
+)
+
 // -- DAOs -------------------------------------------------------------
 
 @Dao
@@ -296,6 +315,24 @@ interface BrewBatchDao {
     fun deleteAll()
 }
 
+@Dao
+interface LandTileDao {
+    @Query("SELECT * FROM land_tiles")
+    fun getAll(): List<LandTileEntity>
+
+    @Query("SELECT * FROM land_tiles WHERE x = :x AND y = :y LIMIT 1")
+    fun get(x: Int, y: Int): LandTileEntity?
+
+    @Insert(onConflict = OnConflictStrategy.REPLACE)
+    fun upsert(tile: LandTileEntity)
+
+    @Insert(onConflict = OnConflictStrategy.REPLACE)
+    fun upsertAll(tiles: List<LandTileEntity>)
+
+    @Query("DELETE FROM land_tiles WHERE x = :x AND y = :y")
+    fun deleteAt(x: Int, y: Int)
+}
+
 // -- Migrations -------------------------------------------------------
 
 val MIGRATION_1_2: Migration = object : Migration(1, 2) {
@@ -332,6 +369,44 @@ val MIGRATION_2_3: Migration = object : Migration(2, 3) {
     }
 }
 
+val MIGRATION_3_4: Migration = object : Migration(3, 4) {
+    override fun migrate(db: SupportSQLiteDatabase) {
+        db.execSQL(
+            """
+            CREATE TABLE IF NOT EXISTS land_tiles (
+                x INTEGER NOT NULL,
+                y INTEGER NOT NULL,
+                owned_at_ms INTEGER,
+                structure TEXT,
+                build_started_ms INTEGER,
+                build_duration_ms INTEGER,
+                PRIMARY KEY(x, y)
+            )
+            """.trimIndent()
+        )
+        // Seed the initial layout. Existing players see their stuff
+        // already placed so the world-map transition isn't disorienting;
+        // brand-new players see the same starter cluster. Coordinates
+        // are signed, House at origin, neighbours laid out along the
+        // four cardinal directions.
+        val now = System.currentTimeMillis()
+        val seedTiles = listOf(
+            Triple(0, 0, "HOUSE"),
+            Triple(1, 0, "FARM_FIELD"),
+            Triple(-1, 0, "POND"),
+            Triple(0, 1, "BIRDWATCHING"),
+            Triple(2, 0, "MALTHOUSE"),
+            Triple(3, 0, "BREWERY"),
+        )
+        for ((x, y, structure) in seedTiles) {
+            db.execSQL(
+                "INSERT OR IGNORE INTO land_tiles (x, y, owned_at_ms, structure) VALUES (?, ?, ?, ?)",
+                arrayOf<Any>(x, y, now, structure),
+            )
+        }
+    }
+}
+
 // -- Database ---------------------------------------------------------
 
 @Database(
@@ -346,8 +421,9 @@ val MIGRATION_2_3: Migration = object : Migration(2, 3) {
         SystemMetaEntity::class,
         KilnRunEntity::class,
         BrewBatchEntity::class,
+        LandTileEntity::class,
     ],
-    version = 3,
+    version = 4,
     exportSchema = false,
 )
 abstract class AppDatabase : RoomDatabase() {
@@ -361,6 +437,7 @@ abstract class AppDatabase : RoomDatabase() {
     abstract fun systemMeta(): SystemMetaDao
     abstract fun kilnRuns(): KilnRunDao
     abstract fun brewBatches(): BrewBatchDao
+    abstract fun landTiles(): LandTileDao
 
     companion object {
         @Volatile private var instance: AppDatabase? = null
@@ -381,7 +458,7 @@ abstract class AppDatabase : RoomDatabase() {
             // a coroutine scope held on the FarmGame, but at our scale
             // this stays well under a frame.
             Room.databaseBuilder(appContext, AppDatabase::class.java, "charming-farmer.db")
-                .addMigrations(MIGRATION_1_2, MIGRATION_2_3)
+                .addMigrations(MIGRATION_1_2, MIGRATION_2_3, MIGRATION_3_4)
                 .allowMainThreadQueries()
                 .build()
     }
