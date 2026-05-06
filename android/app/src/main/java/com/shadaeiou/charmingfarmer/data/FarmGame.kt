@@ -7,6 +7,7 @@ import androidx.compose.runtime.setValue
 import org.json.JSONArray
 import org.json.JSONObject
 import kotlin.math.pow
+import kotlin.random.Random
 
 enum class CropType(
     val displayName: String,
@@ -16,11 +17,18 @@ enum class CropType(
     val growthMs: Long,
     val sellPrice: Int,
     val plantEnergy: Int,
+    /** If non-null, harvesting this crop deposits the item into the FARM
+     * silo with a rolled quality instead of paying coins. */
+    val inventoryItem: ItemType? = null,
 ) {
     CARROT("Carrot", "🥕", "🌱", 3, 20_000L, 8, 2),
     POTATO("Potato", "🥔", "🌱", 5, 25_000L, 13, 2),
     LETTUCE("Lettuce", "🥬", "🌱", 8, 35_000L, 21, 2),
     ONION("Onion", "🧅", "🌱", 12, 50_000L, 32, 2),
+    BARLEY("Barley", "🌾", "🌱", 6, 30_000L, 0, 2, ItemType.BARLEY),
+    WHEATGRAIN("Wheat (grain)", "🌾", "🌱", 10, 45_000L, 0, 2, ItemType.WHEAT_GRAIN),
+    OATS_CROP("Oats", "🌾", "🌱", 14, 60_000L, 0, 2, ItemType.OATS),
+    RYE_CROP("Rye", "🌾", "🌱", 18, 75_000L, 0, 2, ItemType.RYE),
     WHEAT("Wheat", "🌾", "🌱", 17, 65_000L, 45, 3),
     CORN("Corn", "🌽", "🌱", 25, 90_000L, 67, 3),
     BEAN("Bean", "🫘", "🌱", 36, 120_000L, 96, 3),
@@ -56,12 +64,23 @@ enum class TreeType(
     val maxHarvests: Int,
     val sellPrice: Int,
     val plantEnergy: Int,
+    /** If non-null, harvesting deposits the item into the FARM silo
+     * (with quality) instead of paying coins. */
+    val inventoryItem: ItemType? = null,
 ) {
     APPLE_TREE("Apple Tree", "🌳", "🍎", 500, 3_600_000L, 1_200_000L, 3, 400, 4),
     PEACH_TREE("Peach Tree", "🌳", "🍑", 1_500, 7_200_000L, 1_800_000L, 4, 1_000, 5),
     LEMON_TREE("Lemon Tree", "🌲", "🍋", 4_000, 10_800_000L, 2_700_000L, 4, 2_500, 6),
     MANGO_TREE("Mango Tree", "🌴", "🥭", 12_000, 18_000_000L, 3_600_000L, 5, 6_000, 7),
     COCONUT_PALM("Coconut Palm", "🌴", "🥥", 35_000, 28_800_000L, 5_760_000L, 5, 15_000, 9),
+    HOP_BINE("Hop Bine", "🌿", "🌿", 250, 7_200_000L, 1_800_000L, 4, 0, 3, ItemType.HOPS_CASCADE),
+}
+
+/** Roll a quality score for a freshly harvested crop or fruit. */
+fun harvestScore(watered: Boolean): Int {
+    val baseRoll = Random.nextInt(40, 71) // 40-70 inclusive of low, exclusive of high
+    val waterBonus = if (watered) 15 else 0
+    return (baseRoll + waterBonus).coerceIn(0, 100)
 }
 
 enum class PlotKind { GRASS, TILLED, PLANTED, TREE }
@@ -148,6 +167,7 @@ data class FarmState(
 class FarmGame(context: Context) {
     private val prefs = context.applicationContext
         .getSharedPreferences("charming-farmer-v1", Context.MODE_PRIVATE)
+    private val transport = TransportService.get(context)
 
     var state: FarmState by mutableStateOf(load())
         private set
@@ -225,6 +245,30 @@ class FarmGame(context: Context) {
         when {
             p.isReady(now) -> {
                 if (s.energy < ENERGY_HARVEST) { fail("Need ⚡$ENERGY_HARVEST"); return }
+                val item = crop.inventoryItem
+                if (item != null) {
+                    // Grain / hops / other raw ingredients route to the silo
+                    // with a quality roll instead of selling for coins.
+                    val score = harvestScore(p.watered)
+                    val tier = ItemTier.roll()
+                    transport.addToInventory(Location.FARM, ItemStack(
+                        type = item,
+                        quantity = 1,
+                        score = score,
+                        tier = tier,
+                        createdMs = now,
+                    ))
+                    state = s.copy(
+                        energy = s.energy - ENERGY_HARVEST,
+                        harvested = s.harvested + 1,
+                        plots = s.plots.replaceAt(idx, Plot()),
+                    )
+                    val grade = ItemGrade.fromScore(score).display
+                    val tierTag = if (tier != ItemTier.NORMAL) " ${tier.emojiSuffix}" else ""
+                    note("Harvested ${crop.displayName.lowercase()} → silo (Grade $grade$tierTag, $score)")
+                    save()
+                    return
+                }
                 val sellBonusLvl = s.upgradeLevels["sellBonus"] ?: 0
                 val earned = crop.sellPrice + sellBonusLvl * 2
                 state = s.copy(
@@ -292,9 +336,31 @@ class FarmGame(context: Context) {
             }
             p.treeHarvestReady(now) -> {
                 if (s.energy < ENERGY_HARVEST) { fail("Need ⚡$ENERGY_HARVEST"); return }
+                val windowsDue = p.treeWindowsDue(now)
+                val item = tree.inventoryItem
+                if (item != null) {
+                    val score = harvestScore(false)
+                    val tier = ItemTier.roll()
+                    transport.addToInventory(Location.FARM, ItemStack(
+                        type = item,
+                        quantity = 1,
+                        score = score,
+                        tier = tier,
+                        createdMs = now,
+                    ))
+                    state = s.copy(
+                        energy = s.energy - ENERGY_HARVEST,
+                        harvested = s.harvested + 1,
+                        plots = s.plots.replaceAt(idx, p.copy(harvestCount = windowsDue)),
+                    )
+                    val grade = ItemGrade.fromScore(score).display
+                    val tierTag = if (tier != ItemTier.NORMAL) " ${tier.emojiSuffix}" else ""
+                    note("Harvested ${tree.displayName.lowercase()} → silo (Grade $grade$tierTag, $score)")
+                    save()
+                    return
+                }
                 val sellBonusLvl = s.upgradeLevels["sellBonus"] ?: 0
                 val earned = tree.sellPrice + sellBonusLvl * 2
-                val windowsDue = p.treeWindowsDue(now)
                 state = s.copy(
                     energy = s.energy - ENERGY_HARVEST,
                     coins = s.coins + earned,
