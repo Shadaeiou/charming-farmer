@@ -638,10 +638,10 @@ private fun SeedButton(
                         }
                     }
                 }
-                .padding(vertical = 4.dp, horizontal = 4.dp),
+                .padding(vertical = 2.dp, horizontal = 4.dp),
             horizontalAlignment = Alignment.CenterHorizontally,
         ) {
-            Text(crop.emoji, fontSize = 22.sp)
+            Text(crop.emoji, fontSize = 18.sp)
             Text(
                 crop.displayName,
                 style = MaterialTheme.typography.labelSmall,
@@ -759,7 +759,7 @@ private fun UpgradesRow(s: FarmState, costFn: (Upgrade) -> Int, onBuy: (Upgrade)
                     )
                     Spacer(Modifier.height(2.dp))
                     Text(
-                        "🪙$cost · lv $lvl",
+                        "🪙${prettyCoins(cost)} · lv $lvl",
                         style = MaterialTheme.typography.labelSmall,
                         color = labelColor,
                     )
@@ -901,7 +901,14 @@ private fun SummerBackground(modifier: Modifier = Modifier) {
     }
 }
 
-private fun prettyCoins(n: Int): String = if (n >= 1000) "${n / 1000}k" else "$n"
+private fun prettyCoins(n: Int): String = when {
+    n >= 1_000_000 -> {
+        val m = n / 1_000_000.0
+        if (m == m.toLong().toDouble()) "${m.toLong()}m" else "${"%.1f".format(m)}m"
+    }
+    n >= 1_000 -> "${n / 1_000}k"
+    else -> "$n"
+}
 
 private fun prettyTime(ms: Long): String {
     val s = ms / 1000
