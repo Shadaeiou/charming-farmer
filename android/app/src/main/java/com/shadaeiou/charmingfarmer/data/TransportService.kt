@@ -5,6 +5,12 @@ import androidx.compose.runtime.getValue
 import androidx.compose.runtime.mutableStateListOf
 import androidx.compose.runtime.mutableStateOf
 import androidx.compose.runtime.setValue
+import com.shadaeiou.charmingfarmer.data.room.AppDatabase
+import com.shadaeiou.charmingfarmer.data.room.InventoryStackEntity
+import com.shadaeiou.charmingfarmer.data.room.LegacyMigrator
+import com.shadaeiou.charmingfarmer.data.room.SystemMetaKeys
+import com.shadaeiou.charmingfarmer.data.room.TransportTripEntity
+import com.shadaeiou.charmingfarmer.data.room.VehicleOwnedEntity
 import org.json.JSONArray
 import org.json.JSONObject
 
@@ -55,23 +61,26 @@ data class Trip(
 }
 
 /**
- * App-wide singleton. Holds the transport state — owned vehicles, in-flight
- * trips, and per-location inventories. Persists to its own SharedPreferences
- * key (`charming-farmer-transport-v1`) so it grows independently of the
- * existing FarmGame state.
+ * App-wide singleton, now backed by Room. State that this service
+ * owns:
+ *   - Per-location inventories (one row per ItemStack in inventory_stacks)
+ *   - Owned vehicles (vehicles_owned)
+ *   - In-flight trips (transport_trips, cargo serialized as JSON since
+ *     it's read/written as a unit)
+ *   - nextTripId counter (system_meta)
  *
- * Inventories live here too because they're the things the transport service
- * moves between. Any screen reads/writes them via this service.
+ * Inventory edits use Room's @Transaction-backed replaceForLocation so
+ * a ship() that subtracts from origin and adds to destination cannot
+ * land half-applied even if interrupted.
  */
 class TransportService private constructor(appContext: Context) {
 
-    private val prefs = appContext.getSharedPreferences(
-        "charming-farmer-transport-v1",
-        Context.MODE_PRIVATE,
-    )
+    private val db = AppDatabase.get(appContext).also {
+        LegacyMigrator.migrateIfNeeded(appContext, it)
+    }
 
     private val _inventories: MutableMap<Location, Inventory> = mutableMapOf()
-    private val _vehiclesOwned: MutableSet<VehicleType> = mutableSetOf(VehicleType.WHEELBARROW)
+    private val _vehiclesOwned: MutableSet<VehicleType> = mutableSetOf()
     val activeTrips = mutableStateListOf<Trip>()
     private var nextTripId: Long = 1L
 
@@ -80,6 +89,11 @@ class TransportService private constructor(appContext: Context) {
 
     init {
         load()
+        // Wheelbarrow is always free; ensure it's persisted for new users.
+        if (VehicleType.WHEELBARROW !in _vehiclesOwned) {
+            _vehiclesOwned += VehicleType.WHEELBARROW
+            db.vehicles().insert(VehicleOwnedEntity(VehicleType.WHEELBARROW.name))
+        }
     }
 
     fun inventoryAt(location: Location): Inventory =
@@ -89,23 +103,21 @@ class TransportService private constructor(appContext: Context) {
 
     fun vehicleAvailable(vehicle: VehicleType, nowMs: Long): Boolean {
         if (vehicle !in _vehiclesOwned) return false
-        // A vehicle can only be on one trip at a time. Once the trip is
-        // complete it auto-returns instantly for simplicity (could become
-        // a return leg later).
         return activeTrips.none { it.vehicle == vehicle && !it.isComplete(nowMs) }
     }
 
     fun addToInventory(location: Location, stack: ItemStack) {
         if (stack.quantity <= 0) return
-        _inventories[location] = inventoryAt(location).add(stack)
+        val updated = inventoryAt(location).add(stack)
+        _inventories[location] = updated
+        db.inventory().replaceForLocation(location.name, updated.toEntities(location))
         bump()
-        save()
     }
 
     fun setInventory(location: Location, inventory: Inventory) {
         _inventories[location] = inventory
+        db.inventory().replaceForLocation(location.name, inventory.toEntities(location))
         bump()
-        save()
     }
 
     /**
@@ -125,9 +137,9 @@ class TransportService private constructor(appContext: Context) {
         if (!vehicleAvailable(vehicle, nowMs)) return null
         if (amount <= 0 || amount > vehicle.capacityKg) return null
         val (afterRemove, pulled) = inventoryAt(from).remove(type, amount) ?: return null
-        _inventories[from] = afterRemove
+        val tripId = nextTripId++
         val trip = Trip(
-            id = nextTripId++,
+            id = tripId,
             vehicle = vehicle,
             origin = from,
             destination = to,
@@ -135,9 +147,16 @@ class TransportService private constructor(appContext: Context) {
             startMs = nowMs,
             durationMs = vehicle.tripDurationMs,
         )
+        // Origin inventory + active trips list + next-id counter all go
+        // in one transaction so a half-ship can't strand cargo nowhere.
+        db.runInTransaction {
+            db.inventory().replaceForLocation(from.name, afterRemove.toEntities(from))
+            db.trips().insert(trip.toEntity())
+            db.systemMeta().put(SystemMetaKeys.NEXT_TRIP_ID, nextTripId.toString())
+        }
+        _inventories[from] = afterRemove
         activeTrips += trip
         bump()
-        save()
         return trip
     }
 
@@ -149,103 +168,134 @@ class TransportService private constructor(appContext: Context) {
     fun tick(nowMs: Long) {
         val done = activeTrips.filter { it.isComplete(nowMs) }
         if (done.isEmpty()) return
-        for (trip in done) {
-            for (stack in trip.cargo) {
-                _inventories[trip.destination] = inventoryAt(trip.destination).add(stack)
+        // Group cargo by destination so the per-location inventory write
+        // happens once per destination instead of per-stack.
+        val byDest: Map<Location, List<ItemStack>> = done
+            .groupBy { it.destination }
+            .mapValues { (_, trips) -> trips.flatMap { it.cargo } }
+        db.runInTransaction {
+            byDest.forEach { (dest, stacks) ->
+                var inv = inventoryAt(dest)
+                stacks.forEach { inv = inv.add(it) }
+                _inventories[dest] = inv
+                db.inventory().replaceForLocation(dest.name, inv.toEntities(dest))
             }
+            done.forEach { db.trips().deleteById(it.id) }
         }
         activeTrips.removeAll(done)
         bump()
-        save()
     }
 
     fun unlockVehicle(vehicle: VehicleType): Boolean {
         if (vehicle in _vehiclesOwned) return false
         _vehiclesOwned += vehicle
+        db.vehicles().insert(VehicleOwnedEntity(vehicle.name))
         bump()
-        save()
         return true
     }
 
     private fun bump() { revisionTick = revisionTick + 1 }
 
-    private fun save() {
-        val invJson = JSONObject()
-        for ((loc, inv) in _inventories) {
-            invJson.put(loc.name, inv.toJson())
+    private fun load() {
+        // Inventories: one query, partition by location.
+        db.inventory().getAll().groupBy { it.location }.forEach { (locName, rows) ->
+            val location = runCatching { Location.valueOf(locName) }.getOrNull() ?: return@forEach
+            val stacks = rows.mapNotNull { it.toItemStackOrNull() }
+            _inventories[location] = Inventory(stacks)
         }
-        val vehJson = JSONArray().apply {
-            _vehiclesOwned.forEach { put(it.name) }
+        // Vehicles
+        db.vehicles().getAll().forEach { name ->
+            runCatching { VehicleType.valueOf(name) }.getOrNull()?.let { _vehiclesOwned += it }
         }
-        val tripsJson = JSONArray()
-        for (t in activeTrips) {
-            tripsJson.put(JSONObject()
-                .put("id", t.id)
-                .put("vehicle", t.vehicle.name)
-                .put("origin", t.origin.name)
-                .put("destination", t.destination.name)
-                .put("startMs", t.startMs)
-                .put("durationMs", t.durationMs)
-                .put("cargo", JSONArray().also { c -> t.cargo.forEach { stack ->
-                    c.put(JSONObject()
-                        .put("type", stack.type.name)
-                        .put("quantity", stack.quantity)
-                        .put("score", stack.score)
-                        .put("tier", stack.tier.name)
-                        .put("createdMs", stack.createdMs))
-                }}))
+        // Trips
+        db.trips().getAll().forEach { row ->
+            row.toTripOrNull()?.let { activeTrips += it }
         }
-        val root = JSONObject()
-            .put("inventories", invJson)
-            .put("vehicles", vehJson)
-            .put("trips", tripsJson)
-            .put("nextTripId", nextTripId)
-        prefs.edit().putString("state", root.toString()).apply()
+        // Counter
+        nextTripId = db.systemMeta().get(SystemMetaKeys.NEXT_TRIP_ID)
+            ?.toLongOrNull()
+            ?.coerceAtLeast(1L)
+            ?: ((activeTrips.maxOfOrNull { it.id } ?: 0L) + 1L).coerceAtLeast(1L)
     }
 
-    private fun load() {
-        val raw = prefs.getString("state", null) ?: return
-        runCatching {
-            val root = JSONObject(raw)
-            val invs = root.optJSONObject("inventories")
-            if (invs != null) {
-                val keys = invs.keys()
-                while (keys.hasNext()) {
-                    val k = keys.next()
-                    val loc = runCatching { Location.valueOf(k) }.getOrNull() ?: continue
-                    _inventories[loc] = Inventory.fromJson(invs.optJSONArray(k))
-                }
-            }
-            val vehs = root.optJSONArray("vehicles")
-            if (vehs != null) {
-                for (i in 0 until vehs.length()) {
-                    val name = vehs.optString(i)
-                    runCatching { VehicleType.valueOf(name) }.getOrNull()?.let { _vehiclesOwned += it }
-                }
-            }
-            val trips = root.optJSONArray("trips")
-            if (trips != null) {
-                for (i in 0 until trips.length()) {
-                    val o = trips.optJSONObject(i) ?: continue
-                    val vehicle = runCatching { VehicleType.valueOf(o.optString("vehicle")) }
-                        .getOrNull() ?: continue
-                    val origin = runCatching { Location.valueOf(o.optString("origin")) }
-                        .getOrNull() ?: continue
-                    val destination = runCatching { Location.valueOf(o.optString("destination")) }
-                        .getOrNull() ?: continue
-                    activeTrips += Trip(
-                        id = o.optLong("id"),
-                        vehicle = vehicle,
-                        origin = origin,
-                        destination = destination,
-                        cargo = Inventory.fromJson(o.optJSONArray("cargo")).stacks,
-                        startMs = o.optLong("startMs"),
-                        durationMs = o.optLong("durationMs"),
-                    )
-                }
-            }
-            nextTripId = root.optLong("nextTripId", 1L).coerceAtLeast(1L)
+    // -- Entity <-> domain mapping --------------------------------------
+
+    private fun Inventory.toEntities(location: Location): List<InventoryStackEntity> =
+        stacks.map { stack ->
+            InventoryStackEntity(
+                location = location.name,
+                type = stack.type.name,
+                quantity = stack.quantity,
+                score = stack.score,
+                tier = stack.tier.name,
+                createdMs = stack.createdMs,
+            )
         }
+
+    private fun InventoryStackEntity.toItemStackOrNull(): ItemStack? {
+        val type = ItemType.valueOfOrNull(type) ?: return null
+        if (quantity <= 0) return null
+        val tier = runCatching { ItemTier.valueOf(tier) }.getOrDefault(ItemTier.NORMAL)
+        return ItemStack(
+            type = type,
+            quantity = quantity,
+            score = score.coerceIn(0, 100),
+            tier = tier,
+            createdMs = createdMs,
+        )
+    }
+
+    private fun Trip.toEntity(): TransportTripEntity {
+        val cargoJson = JSONArray().apply {
+            cargo.forEach { stack ->
+                put(JSONObject()
+                    .put("type", stack.type.name)
+                    .put("quantity", stack.quantity)
+                    .put("score", stack.score)
+                    .put("tier", stack.tier.name)
+                    .put("createdMs", stack.createdMs))
+            }
+        }
+        return TransportTripEntity(
+            id = id,
+            vehicle = vehicle.name,
+            origin = origin.name,
+            destination = destination.name,
+            cargoJson = cargoJson.toString(),
+            startMs = startMs,
+            durationMs = durationMs,
+        )
+    }
+
+    private fun TransportTripEntity.toTripOrNull(): Trip? {
+        val veh = runCatching { VehicleType.valueOf(vehicle) }.getOrNull() ?: return null
+        val orig = runCatching { Location.valueOf(origin) }.getOrNull() ?: return null
+        val dest = runCatching { Location.valueOf(destination) }.getOrNull() ?: return null
+        val cargoArr = runCatching { JSONArray(cargoJson) }.getOrNull() ?: return null
+        val cargo = mutableListOf<ItemStack>()
+        for (i in 0 until cargoArr.length()) {
+            val s = cargoArr.optJSONObject(i) ?: continue
+            val type = ItemType.valueOfOrNull(s.optString("type")) ?: continue
+            val qty = s.optInt("quantity", 0)
+            if (qty <= 0) continue
+            cargo += ItemStack(
+                type = type,
+                quantity = qty,
+                score = s.optInt("score", 50),
+                tier = runCatching { ItemTier.valueOf(s.optString("tier", "NORMAL")) }
+                    .getOrDefault(ItemTier.NORMAL),
+                createdMs = s.optLong("createdMs", 0L),
+            )
+        }
+        return Trip(
+            id = id,
+            vehicle = veh,
+            origin = orig,
+            destination = dest,
+            cargo = cargo,
+            startMs = startMs,
+            durationMs = durationMs,
+        )
     }
 
     companion object {

@@ -4,8 +4,12 @@ import android.content.Context
 import androidx.compose.runtime.getValue
 import androidx.compose.runtime.mutableStateOf
 import androidx.compose.runtime.setValue
-import org.json.JSONArray
-import org.json.JSONObject
+import com.shadaeiou.charmingfarmer.data.room.AppDatabase
+import com.shadaeiou.charmingfarmer.data.room.BirdSeenEntity
+import com.shadaeiou.charmingfarmer.data.room.GameStateEntity
+import com.shadaeiou.charmingfarmer.data.room.LegacyMigrator
+import com.shadaeiou.charmingfarmer.data.room.PlotEntity
+import com.shadaeiou.charmingfarmer.data.room.UpgradeLevelEntity
 import kotlin.math.pow
 import kotlin.random.Random
 
@@ -165,9 +169,11 @@ data class FarmState(
 )
 
 class FarmGame(context: Context) {
-    private val prefs = context.applicationContext
-        .getSharedPreferences("charming-farmer-v1", Context.MODE_PRIVATE)
-    private val transport = TransportService.get(context)
+    private val appContext = context.applicationContext
+    private val db = AppDatabase.get(appContext).also {
+        LegacyMigrator.migrateIfNeeded(appContext, it)
+    }
+    private val transport = TransportService.get(appContext)
 
     var state: FarmState by mutableStateOf(load())
         private set
@@ -412,10 +418,36 @@ class FarmGame(context: Context) {
     }
 
     fun reset() {
-        prefs.edit().remove("state").apply()
-        state = FarmState(lastTickMs = System.currentTimeMillis())
+        // Wipe everything Room knows about the farm state (plots,
+        // upgrades, birds), but leave inventories alone — those live
+        // in TransportService and should survive a "fresh start" of
+        // the farm itself.
+        db.runInTransaction {
+            db.gameState().upsert(GameStateEntity(
+                energy = STARTING_ENERGY.toFloat(),
+                maxEnergy = STARTING_ENERGY,
+                regenMs = 3000L,
+                lastTickMs = System.currentTimeMillis(),
+                coins = STARTING_COINS,
+                harvested = 0,
+                selectedSeed = CropType.CARROT.name,
+                selectedTree = null,
+            ))
+            db.plots().upsertAll(List(PLOT_COUNT) {
+                PlotEntity(
+                    position = it,
+                    kind = PlotKind.GRASS.name,
+                    crop = null,
+                    tree = null,
+                    plantedAtMs = 0L,
+                    watered = false,
+                    bonusMs = 0L,
+                    harvestCount = 0,
+                )
+            })
+        }
+        state = load()
         note("Fresh start!")
-        save()
     }
 
     // Lets other screens (e.g. fishing) consume from the shared energy pool
@@ -460,101 +492,102 @@ class FarmGame(context: Context) {
 
     fun save() {
         val s = state
-        val plotsJson = JSONArray()
-        for (p in s.plots) {
-            val o = JSONObject()
-                .put("kind", p.kind.name)
-                .put("plantedAtMs", p.plantedAtMs)
-                .put("watered", p.watered)
-                .put("bonusMs", p.bonusMs)
-                .put("harvestCount", p.harvestCount)
-            if (p.crop != null) o.put("crop", p.crop.name)
-            if (p.tree != null) o.put("tree", p.tree.name)
-            plotsJson.put(o)
+        db.runInTransaction {
+            db.gameState().upsert(GameStateEntity(
+                energy = s.energy,
+                maxEnergy = s.maxEnergy,
+                regenMs = s.regenMs,
+                lastTickMs = s.lastTickMs,
+                coins = s.coins,
+                harvested = s.harvested,
+                selectedSeed = s.selectedSeed.name,
+                selectedTree = s.selectedTree?.name,
+            ))
+            db.plots().upsertAll(s.plots.mapIndexed { i, p ->
+                PlotEntity(
+                    position = i,
+                    kind = p.kind.name,
+                    crop = p.crop?.name,
+                    tree = p.tree?.name,
+                    plantedAtMs = p.plantedAtMs,
+                    watered = p.watered,
+                    bonusMs = p.bonusMs,
+                    harvestCount = p.harvestCount,
+                )
+            })
+            db.upgradeLevels().upsertAll(s.upgradeLevels.map {
+                UpgradeLevelEntity(it.key, it.value)
+            })
+            // Birds are append-only per species; we upsert each with
+            // its current count. Pruning species the player has zero
+            // of is unnecessary — the table is small.
+            db.birdsSeen().upsertAll(s.birdsSeen
+                .filter { it.value > 0 }
+                .map { BirdSeenEntity(it.key, it.value) })
         }
-        val upJson = JSONObject()
-        for ((k, v) in s.upgradeLevels) upJson.put(k, v)
-        val birdsJson = JSONObject()
-        for ((k, v) in s.birdsSeen) birdsJson.put(k, v)
-        val json = JSONObject()
-            .put("energy", s.energy.toDouble())
-            .put("maxEnergy", s.maxEnergy)
-            .put("regenMs", s.regenMs)
-            .put("lastTickMs", s.lastTickMs)
-            .put("coins", s.coins)
-            .put("harvested", s.harvested)
-            .put("selectedSeed", s.selectedSeed.name)
-            .put("upgrades", upJson)
-            .put("plots", plotsJson)
-            .put("birdsSeen", birdsJson)
-        if (s.selectedTree != null) json.put("selectedTree", s.selectedTree.name)
-        prefs.edit().putString("state", json.toString()).apply()
     }
 
     private fun load(): FarmState {
-        val raw = prefs.getString("state", null) ?: return FarmState()
-        return runCatching {
-            val o = JSONObject(raw)
-            val plotsJson = o.getJSONArray("plots")
-            val plots = ArrayList<Plot>(plotsJson.length())
-            for (i in 0 until plotsJson.length()) {
-                val po = plotsJson.getJSONObject(i)
-                val kind = runCatching { PlotKind.valueOf(po.getString("kind")) }.getOrDefault(PlotKind.GRASS)
-                val crop = po.optString("crop").takeIf { it.isNotEmpty() }
-                    ?.let { runCatching { CropType.valueOf(it) }.getOrNull() }
-                val tree = po.optString("tree").takeIf { it.isNotEmpty() }
-                    ?.let { runCatching { TreeType.valueOf(it) }.getOrNull() }
-                val resolvedKind = when {
-                    kind == PlotKind.PLANTED && crop == null -> PlotKind.GRASS
-                    kind == PlotKind.TREE && tree == null -> PlotKind.GRASS
-                    else -> kind
-                }
-                plots.add(Plot(
-                    kind = resolvedKind,
-                    crop = if (resolvedKind == PlotKind.PLANTED) crop else null,
-                    tree = if (resolvedKind == PlotKind.TREE) tree else null,
-                    plantedAtMs = po.optLong("plantedAtMs"),
-                    watered = po.optBoolean("watered"),
-                    bonusMs = po.optLong("bonusMs"),
-                    harvestCount = po.optInt("harvestCount"),
-                ))
-            }
-            val upMap = mutableMapOf<String, Int>()
-            o.optJSONObject("upgrades")?.let { upObj ->
-                val keys = upObj.keys()
-                while (keys.hasNext()) {
-                    val k = keys.next()
-                    upMap[k] = upObj.getInt(k)
-                }
-            }
-            if (!upMap.containsKey("maxEnergy")) upMap["maxEnergy"] = 0
-            if (!upMap.containsKey("regen")) upMap["regen"] = 0
-            if (!upMap.containsKey("growthSpeed")) upMap["growthSpeed"] = 0
-            if (!upMap.containsKey("sellBonus")) upMap["sellBonus"] = 0
-            if (!upMap.containsKey("waterBonus")) upMap["waterBonus"] = 0
-            val birdsMap = mutableMapOf<String, Int>()
-            o.optJSONObject("birdsSeen")?.let { obj ->
-                val keys = obj.keys()
-                while (keys.hasNext()) {
-                    val k = keys.next()
-                    birdsMap[k] = obj.optInt(k, 0)
-                }
-            }
-            FarmState(
-                energy = o.optDouble("energy", STARTING_ENERGY.toDouble()).toFloat(),
-                maxEnergy = o.optInt("maxEnergy", STARTING_ENERGY),
-                regenMs = o.optLong("regenMs", 3000L),
-                lastTickMs = o.optLong("lastTickMs", System.currentTimeMillis()),
-                coins = o.optInt("coins", STARTING_COINS),
-                harvested = o.optInt("harvested", 0),
-                selectedSeed = runCatching { CropType.valueOf(o.optString("selectedSeed", "CARROT")) }
-                    .getOrDefault(CropType.CARROT),
-                selectedTree = o.optString("selectedTree").takeIf { it.isNotEmpty() }
-                    ?.let { runCatching { TreeType.valueOf(it) }.getOrNull() },
-                upgradeLevels = upMap,
-                plots = if (plots.size == PLOT_COUNT) plots else List(PLOT_COUNT) { Plot() },
-                birdsSeen = birdsMap,
-            )
-        }.getOrElse { FarmState(lastTickMs = System.currentTimeMillis()) }
+        val gs = db.gameState().getOrNull() ?: return seedNewGameState()
+        val plotRows = db.plots().getAll().sortedBy { it.position }
+        val plots: List<Plot> = if (plotRows.size == PLOT_COUNT) {
+            plotRows.map { row -> rowToPlot(row) }
+        } else {
+            // Either the table is empty (fresh install, no plots row yet)
+            // or some rows are missing (unusual). Fall back to grass and
+            // overwrite on first save.
+            List(PLOT_COUNT) { Plot() }
+        }
+        val upMap: MutableMap<String, Int> = db.upgradeLevels().getAll()
+            .associate { it.key to it.level }
+            .toMutableMap()
+        if (!upMap.containsKey("maxEnergy")) upMap["maxEnergy"] = 0
+        if (!upMap.containsKey("regen")) upMap["regen"] = 0
+        if (!upMap.containsKey("growthSpeed")) upMap["growthSpeed"] = 0
+        if (!upMap.containsKey("sellBonus")) upMap["sellBonus"] = 0
+        if (!upMap.containsKey("waterBonus")) upMap["waterBonus"] = 0
+        val birdsMap = db.birdsSeen().getAll().associate { it.speciesKey to it.count }
+        return FarmState(
+            energy = gs.energy,
+            maxEnergy = gs.maxEnergy,
+            regenMs = gs.regenMs,
+            lastTickMs = gs.lastTickMs.takeIf { it != 0L } ?: System.currentTimeMillis(),
+            coins = gs.coins,
+            harvested = gs.harvested,
+            selectedSeed = runCatching { CropType.valueOf(gs.selectedSeed) }
+                .getOrDefault(CropType.CARROT),
+            selectedTree = gs.selectedTree?.let {
+                runCatching { TreeType.valueOf(it) }.getOrNull()
+            },
+            upgradeLevels = upMap,
+            plots = plots,
+            birdsSeen = birdsMap,
+        )
+    }
+
+    private fun seedNewGameState(): FarmState = FarmState(
+        lastTickMs = System.currentTimeMillis(),
+    )
+
+    private fun rowToPlot(row: PlotEntity): Plot {
+        val kind = runCatching { PlotKind.valueOf(row.kind) }.getOrDefault(PlotKind.GRASS)
+        val crop = row.crop?.let { runCatching { CropType.valueOf(it) }.getOrNull() }
+        val tree = row.tree?.let { runCatching { TreeType.valueOf(it) }.getOrNull() }
+        // Defensive: if a save references a CropType / TreeType we've
+        // since removed, the plot reverts to grass instead of crashing.
+        val resolvedKind = when {
+            kind == PlotKind.PLANTED && crop == null -> PlotKind.GRASS
+            kind == PlotKind.TREE && tree == null -> PlotKind.GRASS
+            else -> kind
+        }
+        return Plot(
+            kind = resolvedKind,
+            crop = if (resolvedKind == PlotKind.PLANTED) crop else null,
+            tree = if (resolvedKind == PlotKind.TREE) tree else null,
+            plantedAtMs = row.plantedAtMs,
+            watered = row.watered,
+            bonusMs = row.bonusMs,
+            harvestCount = row.harvestCount,
+        )
     }
 }
