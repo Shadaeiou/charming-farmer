@@ -27,25 +27,35 @@ When in doubt: load, don't crash, never wipe.
 
 ### Adding a Room migration (cookbook)
 
+The schema is currently at **v3** with `MIGRATION_1_2` (added `kiln_runs`) and `MIGRATION_2_3` (added `brew_batches`). To go to v4:
+
 ```kotlin
-// 1. Bump the version
-@Database(entities = [...], version = 2, exportSchema = false)
-abstract class AppDatabase : RoomDatabase() { ... }
+// 1. Bump version + add the new entity to the @Database annotation
+@Database(entities = [..., NewEntity::class], version = 4, exportSchema = false)
 
 // 2. Define the migration
-val MIGRATION_1_2 = object : Migration(1, 2) {
+val MIGRATION_3_4 = object : Migration(3, 4) {
     override fun migrate(db: SupportSQLiteDatabase) {
-        db.execSQL("ALTER TABLE plots ADD COLUMN soil_quality INTEGER NOT NULL DEFAULT 50")
+        db.execSQL("CREATE TABLE IF NOT EXISTS new_table (...)")
+        // or ALTER TABLE existing_table ADD COLUMN new_col ...
     }
 }
 
-// 3. Wire it into the builder in AppDatabase.build()
+// 3. Add it to the builder chain
 Room.databaseBuilder(...)
-    .addMigrations(MIGRATION_1_2)
+    .addMigrations(MIGRATION_1_2, MIGRATION_2_3, MIGRATION_3_4)
     .build()
 ```
 
+**Always keep all prior migrations in `addMigrations()`.** Players can be on any old version; Room walks the chain from where they are.
+
 If you ever truly cannot migrate (catastrophic schema change), gate it behind the `system_meta` table and write a Kotlin-level migration that reads old rows and writes new ones before dropping the old table. Never call `fallbackToDestructiveMigration()` — that drops player data.
+
+### Persistence is 100% Room
+
+Game data, UI state (last-visited screen), debug toggles — everything lives in Room. **Don't introduce new `SharedPreferences` files.** The only remaining `SharedPreferences` reads in the codebase are inside [`LegacyMigrator`](android/app/src/main/java/com/shadaeiou/charmingfarmer/data/room/LegacyMigrator.kt), which copies the original pre-Room blobs over once.
+
+If you need a one-key-value pair, add it to `system_meta` with a typed key constant in the file that owns the data.
 
 ### Legacy SharedPreferences
 
@@ -113,6 +123,122 @@ Why this matters:
 ## Build verification
 
 Local sandbox can't install the Android SDK (no internet). Don't try `./gradlew assembleDebug` — it'll fail. Trust the code, push to `main`, watch CI in the GitHub Actions tab.
+
+## Architecture patterns
+
+These have settled across the codebase. Match them when adding new features.
+
+### Service singleton
+
+Every app-wide game service uses this shape:
+
+```kotlin
+class Brewery private constructor(appContext: Context) {
+    private val db = AppDatabase.get(appContext).also {
+        LegacyMigrator.migrateIfNeeded(appContext, it)
+    }
+    // ... mutable state, public API ...
+
+    companion object {
+        @Volatile private var instance: Brewery? = null
+        fun get(context: Context): Brewery {
+            val existing = instance
+            if (existing != null) return existing
+            return synchronized(this) {
+                instance ?: Brewery(context.applicationContext).also { instance = it }
+            }
+        }
+    }
+}
+```
+
+Examples already in the tree: `FarmGame`, `TransportService`, `Malthouse`, `Brewery`, `DebugSettings`. Any new game subsystem (Apiary, Kitchen, Cellar, ...) should follow this.
+
+The `LegacyMigrator.migrateIfNeeded()` call in `init` is **mandatory** — it's the safety net that ensures the migration runs no matter which screen the player lands on first.
+
+### Composables get state via `remember { Service.get(ctx) }`
+
+Each screen (e.g. `BreweryScreen`, `MalthouseScreen`) does:
+
+```kotlin
+val game = remember { FarmGame(ctx.applicationContext) }
+val transport = remember { TransportService.get(ctx.applicationContext) }
+val brewery = remember { Brewery.get(ctx.applicationContext) }
+```
+
+`FarmGame` is a `class` (not singleton); it's safe to instantiate per-screen because it only owns `mutableStateOf` of `FarmState`, which all reads from Room. Other services are singletons because they own collections that need to stay coherent across screens (in-flight trips, brew batches, etc.).
+
+For collection state held outside Compose (e.g. `mutableStateListOf<Trip>` inside `TransportService`), expose a `var revisionTick: Int by mutableStateOf(0)` that you `bump()` after every mutation. Composables read `revisionTick` at the top of the function (or annotate with `@Suppress("UNUSED_EXPRESSION") service.revisionTick` so it's tracked but the value is ignored). That's the recomposition trigger.
+
+### Universal quality model
+
+Every produced or processed item — crops in the silo, malt at the malthouse, bottled beer at the brewery, eventually cooked dishes and honey jars — is an `ItemStack(type, quantity, score, tier, createdMs)`. Don't invent a new "thing" data class for a new feature; use ItemStack and add a new entry to `ItemType`.
+
+Quality math:
+- **Score (0-100)** is the fine-grained quality. Bucketed by `ItemGrade` (S/A/B/C/D/F) for display.
+- **Tier (NORMAL/MEGA/GOLDEN/PERFECT)** is the rare-roll modifier. Roll on harvest via `ItemTier.roll()`.
+- Recipes that consume multiple ItemStacks should compute their output via `computeOutputScore(inputAverage, skillBonus, equipmentCap)` — the standard formula already used by `Malthouse` and `Brewery`.
+- Sale price scales as `basePrice × (score/100)² × tier.priceMultiplier` via `ItemStack.unitSellPrice()`.
+
+If a feature needs to track ingredient tier through processing (a "championship" pumpkin pie), pass the LOWEST tier of any input through to the output. Garbage in, garbage out — even for tier rolls.
+
+### Inventories live in `TransportService`
+
+`TransportService` owns a `Map<Location, Inventory>`. Adding to or removing from an inventory is `transport.addToInventory(loc, stack)` or `transport.setInventory(loc, newInv)`. **Don't keep parallel inventory state in your own service** — that's how shipping arrives at a destination that already has stale data.
+
+When pulling from an inventory in a recipe, use `inventory.removeBest(type, qty)` — that takes top-quality stacks first, which matches "the player puts their best stuff into the brew."
+
+### Routing rules
+
+`Location.accepts(item: ItemType): Boolean` is the single answer for "what can ship where". When you add a new `ItemType` or `Location`, edit this method to declare what makes sense:
+
+```kotlin
+fun Location.accepts(item: ItemType): Boolean = when (this) {
+    FARM -> true                                        // catch-all return
+    MALTHOUSE -> item in MALTING_GRAINS                // raw grains only
+    BREWERY -> item.name.startsWith("MALT_") || ...    // brewing inputs
+    KITCHEN -> false                                    // not built yet
+    MARKET -> true                                      // sells anything
+    CELLAR -> item.name.startsWith("BEER_")            // beer ages here
+}
+```
+
+The transport panel uses this to filter destination buttons per item, so the player never sees a "send hops to malthouse" option.
+
+### Honor `DebugSettings.skipTimers` everywhere
+
+Any new mechanic with a real-time clock — bird spawn intervals, fishing bites, brew stages, transport trips, kiln runs, plot growth — must short-circuit when `DebugSettings.skipTimers == true`. Pattern:
+
+```kotlin
+fun isComplete(nowMs: Long): Boolean =
+    DebugSettings.skipTimers || nowMs - startMs >= durationMs
+```
+
+It's a static singleton; no plumbing needed. The Settings screen toggle drives play-testing.
+
+## Adding a new atlas destination
+
+When you add a new playable location, touch all of these in one commit:
+
+1. `Location` enum — new entry with display name + emoji
+2. `Location.accepts()` — declare what cargo can come in
+3. New `ServiceName.kt` data class following the singleton pattern above
+4. New Room entity + DAO + migration if it needs to persist anything beyond `system_meta` keys
+5. New `*Screen.kt` Composable
+6. `MapScreen` — add a `Destination(...)` entry with `unlocked = true`
+7. `MapScreen` — add `onGoToX: () -> Unit` parameter and threaded callback
+8. `MainActivity` — add `composable("x") { ... }` route + `onGoToX` callback that calls `saveLastDest("x")`
+9. Changelog entry — yes, this is player-visible
+
+Forgetting #2 makes the transport panel show no destinations from this location. Forgetting #8 means tapping the tile crashes navigation.
+
+## Compose pitfalls that have bitten me
+
+I can't run a local build, so these cost a CI cycle each. Watch for them:
+
+- **Missing imports for inline-qualified Compose APIs.** Writing `androidx.compose.material.icons.Icons.Filled.LocalShipping` doesn't auto-resolve — `LocalShipping` is an extension property on `Icons.Filled` from the `material-icons-extended` artifact, and it requires `import androidx.compose.material.icons.filled.LocalShipping` to be visible. Same shape for any `Icons.Filled.*` you haven't used in this file before. Always add the explicit import.
+- **`var foo by mutableStateOf(...)` + `fun setFoo(...)` collide on JVM.** The property auto-generates a `setFoo(Z)V` setter; a hand-written function with the same name produces "Platform declaration clash" at compile time. Fix: name the function `updateFoo`, `applyFoo`, or anything that isn't `set<Property>`.
+- **Adding a new Compose API call to a file means checking imports.** The `remember`, `mutableStateOf`, `LaunchedEffect`, `DisposableEffect`, `mutableLongStateOf`, `mutableStateListOf` set drifts per file. When I add the first call of one of those to a screen, I need to verify it's imported.
 
 ## Code style
 
