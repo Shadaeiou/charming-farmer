@@ -1,12 +1,11 @@
 package com.shadaeiou.charmingfarmer.ui
 
-import androidx.compose.animation.core.LinearEasing
-import androidx.compose.animation.core.RepeatMode
 import androidx.compose.animation.core.animateFloat
 import androidx.compose.animation.core.animateFloatAsState
 import androidx.compose.animation.core.infiniteRepeatable
 import androidx.compose.animation.core.rememberInfiniteTransition
 import androidx.compose.animation.core.tween
+import androidx.compose.animation.core.RepeatMode
 import androidx.compose.foundation.Canvas
 import androidx.compose.foundation.background
 import androidx.compose.foundation.border
@@ -50,6 +49,7 @@ import androidx.compose.runtime.Composable
 import androidx.compose.runtime.DisposableEffect
 import androidx.compose.runtime.LaunchedEffect
 import androidx.compose.runtime.getValue
+import androidx.compose.runtime.mutableFloatStateOf
 import androidx.compose.runtime.mutableLongStateOf
 import androidx.compose.runtime.mutableStateOf
 import androidx.compose.runtime.remember
@@ -59,9 +59,12 @@ import androidx.compose.ui.Modifier
 import androidx.compose.ui.draw.alpha
 import androidx.compose.ui.draw.clip
 import androidx.compose.ui.draw.scale
+import androidx.compose.ui.geometry.Offset
+import androidx.compose.ui.geometry.Size
 import androidx.compose.ui.graphics.Color
-import androidx.compose.ui.graphics.drawscope.drawIntoCanvas
-import androidx.compose.ui.graphics.nativeCanvas
+import androidx.compose.ui.graphics.Path
+import androidx.compose.ui.graphics.StrokeCap
+import androidx.compose.ui.graphics.drawscope.Stroke
 import androidx.compose.ui.input.pointer.pointerInput
 import androidx.compose.ui.platform.LocalContext
 import androidx.compose.ui.platform.LocalDensity
@@ -84,7 +87,8 @@ import com.shadaeiou.charmingfarmer.data.Season
 import com.shadaeiou.charmingfarmer.data.TreeType
 import com.shadaeiou.charmingfarmer.data.UPGRADES
 import com.shadaeiou.charmingfarmer.data.Upgrade
-import kotlin.random.Random
+import kotlin.math.cos
+import kotlin.math.sin
 import kotlinx.coroutines.delay
 import kotlinx.coroutines.withTimeoutOrNull
 
@@ -102,7 +106,8 @@ fun HomeScreen(onOpenSettings: () -> Unit, onOpenMap: () -> Unit) {
     val game = remember { FarmGame(ctx.applicationContext) }
     val transport = remember { com.shadaeiou.charmingfarmer.data.TransportService.get(ctx.applicationContext) }
     var nowMs by remember { mutableLongStateOf(System.currentTimeMillis()) }
-    var currentSeason by remember { mutableStateOf(Season.current()) }
+    var currentSeason by remember { mutableStateOf(game.currentSeason()) }
+    var seasonCycleProgress by remember { mutableFloatStateOf(game.seasonCycleProgress()) }
     var transportOpen by remember { mutableStateOf(false) }
 
     LaunchedEffect(Unit) {
@@ -110,7 +115,8 @@ fun HomeScreen(onOpenSettings: () -> Unit, onOpenMap: () -> Unit) {
             game.tick()
             transport.tick(System.currentTimeMillis())
             nowMs = System.currentTimeMillis()
-            currentSeason = Season.current()
+            currentSeason = game.currentSeason(nowMs)
+            seasonCycleProgress = game.seasonCycleProgress(nowMs)
             delay(250)
         }
     }
@@ -168,7 +174,7 @@ fun HomeScreen(onOpenSettings: () -> Unit, onOpenMap: () -> Unit) {
                 Spacer(Modifier.height(4.dp))
                 FeedbackText(game.feedback, game.feedbackBad)
                 Spacer(Modifier.height(4.dp))
-                FarmGrid(state, nowMs, currentSeason, modifier = Modifier.weight(1f), onPlotClick = { game.clickPlot(it) })
+                FarmGrid(state, nowMs, currentSeason, seasonCycleProgress, modifier = Modifier.weight(1f), onPlotClick = { game.clickPlot(it) })
                 Spacer(Modifier.height(6.dp))
                 SeedShelf(state, currentSeason, onSelect = { game.selectSeed(it) })
                 Spacer(Modifier.height(4.dp))
@@ -287,6 +293,7 @@ private fun FarmGrid(
     s: FarmState,
     nowMs: Long,
     currentSeason: Season,
+    cycleProgress: Float,
     modifier: Modifier = Modifier,
     onPlotClick: (Int) -> Unit,
 ) {
@@ -323,6 +330,12 @@ private fun FarmGrid(
                     }
                 }
             }
+            SeasonClock(
+                cycleProgress = cycleProgress,
+                modifier = Modifier
+                    .size(76.dp)
+                    .align(Alignment.TopCenter),
+            )
         }
     }
 }
@@ -769,6 +782,74 @@ private fun UpgradesRow(s: FarmState, costFn: (Upgrade) -> Int, onBuy: (Upgrade)
     }
 }
 
+/** 4-quadrant clock: Spring=top-right, Summer=bottom-right, Fall=bottom-left, Winter=top-left. */
+@Composable
+private fun SeasonClock(cycleProgress: Float, modifier: Modifier = Modifier) {
+    Box(modifier = modifier, contentAlignment = Alignment.Center) {
+        Canvas(modifier = Modifier.fillMaxSize()) {
+            val cx = size.width / 2f
+            val cy = size.height / 2f
+            val r = minOf(size.width, size.height) / 2f - 2f
+            val arcRect = androidx.compose.ui.geometry.Rect(cx - r, cy - r, cx + r, cy + r)
+
+            // Semi-opaque dark backing
+            drawCircle(Color(0xCC111111), radius = r + 2f, center = Offset(cx, cy))
+
+            // Season quadrants (muted colours matching backgrounds)
+            // Spring  12→3 o'clock = startAngle -90, sweep 90
+            drawArc(Color(0xFF1B3A12), -90f, 90f, useCenter = true,
+                topLeft = Offset(arcRect.left, arcRect.top),
+                size = Size(arcRect.width, arcRect.height))
+            // Summer  3→6 o'clock
+            drawArc(Color(0xFF2B3A00), 0f, 90f, useCenter = true,
+                topLeft = Offset(arcRect.left, arcRect.top),
+                size = Size(arcRect.width, arcRect.height))
+            // Fall    6→9 o'clock
+            drawArc(Color(0xFF3A1500), 90f, 90f, useCenter = true,
+                topLeft = Offset(arcRect.left, arcRect.top),
+                size = Size(arcRect.width, arcRect.height))
+            // Winter  9→12 o'clock
+            drawArc(Color(0xFF0A1E3A), 180f, 90f, useCenter = true,
+                topLeft = Offset(arcRect.left, arcRect.top),
+                size = Size(arcRect.width, arcRect.height))
+
+            // Quadrant divider lines
+            val div = Color(0x55FFFFFF)
+            drawLine(div, Offset(cx, cy - r), Offset(cx, cy + r), 1f)
+            drawLine(div, Offset(cx - r, cy), Offset(cx + r, cy), 1f)
+
+            // Outer ring
+            drawCircle(Color(0x44FFFFFF), radius = r, center = Offset(cx, cy),
+                style = Stroke(1.5f))
+
+            // Clock hand
+            val handAngleDeg = cycleProgress * 360f - 90f
+            val handAngleRad = Math.toRadians(handAngleDeg.toDouble()).toFloat()
+            val handLen = r * 0.72f
+            drawLine(
+                Color.White,
+                Offset(cx, cy),
+                Offset(cx + handLen * cos(handAngleRad), cy + handLen * sin(handAngleRad)),
+                strokeWidth = 2.5f,
+                cap = StrokeCap.Round,
+            )
+            // Centre pivot
+            drawCircle(Color.White, radius = 3f, center = Offset(cx, cy))
+        }
+        // Season emojis at each corner quadrant
+        Box(modifier = Modifier.fillMaxSize()) {
+            Text(Season.SPRING.emoji, fontSize = 8.sp,
+                modifier = Modifier.align(Alignment.TopEnd).padding(end = 3.dp, top = 3.dp))
+            Text(Season.SUMMER.emoji, fontSize = 8.sp,
+                modifier = Modifier.align(Alignment.BottomEnd).padding(end = 3.dp, bottom = 3.dp))
+            Text(Season.FALL.emoji, fontSize = 8.sp,
+                modifier = Modifier.align(Alignment.BottomStart).padding(start = 3.dp, bottom = 3.dp))
+            Text(Season.WINTER.emoji, fontSize = 8.sp,
+                modifier = Modifier.align(Alignment.TopStart).padding(start = 3.dp, top = 3.dp))
+        }
+    }
+}
+
 @Composable
 private fun SeasonBackground(season: Season, modifier: Modifier = Modifier) {
     when (season) {
@@ -779,124 +860,119 @@ private fun SeasonBackground(season: Season, modifier: Modifier = Modifier) {
     }
 }
 
+/** Dark reddish-brown with alternating up/down triangle tessellation. */
 @Composable
 private fun FallBackground(modifier: Modifier = Modifier) {
-    val paint = remember {
-        android.graphics.Paint().apply {
-            textSize = 34f
-            textAlign = android.graphics.Paint.Align.CENTER
-        }
-    }
-    val leafEmojis = listOf("🍁", "🍂", "🍁", "🍃", "🍁", "🍂")
-    val angles = listOf(-30f, 20f, -10f, 35f, 0f, -20f)
     Canvas(modifier = modifier) {
-        drawRect(Color(0xFFE65100))
-        drawIntoCanvas { canvas ->
-            val step = 76f
-            val rows = (size.height / step).toInt() + 2
-            val cols = (size.width / step).toInt() + 2
-            for (row in 0..rows) {
+        drawRect(Color(0xFF180800))
+        val step = 64f
+        val rows = (size.height / step).toInt() + 3
+        val cols = (size.width / step).toInt() + 2
+        val fill = Color(0xFF2C1005)
+        val stroke = Color(0xFF3D1A08)
+        for (row in -1..rows) {
+            for (col in -1..cols) {
                 val xOff = if (row % 2 == 0) 0f else step / 2
-                val y = row * step * 0.72f + step * 0.5f
-                for (col in 0..cols) {
-                    val x = col * step + xOff
-                    val emojiIdx = (row * (cols + 1) + col) % leafEmojis.size
-                    canvas.nativeCanvas.save()
-                    canvas.nativeCanvas.rotate(angles[emojiIdx], x, y)
-                    canvas.nativeCanvas.drawText(leafEmojis[emojiIdx], x, y, paint)
-                    canvas.nativeCanvas.restore()
+                val cx = col * step + xOff
+                val cy = row * step
+                val path = Path()
+                if ((row + col) % 2 == 0) {
+                    // upward triangle
+                    path.moveTo(cx, cy - step * 0.5f)
+                    path.lineTo(cx - step * 0.5f, cy + step * 0.35f)
+                    path.lineTo(cx + step * 0.5f, cy + step * 0.35f)
+                } else {
+                    // downward triangle
+                    path.moveTo(cx, cy + step * 0.5f)
+                    path.lineTo(cx - step * 0.5f, cy - step * 0.35f)
+                    path.lineTo(cx + step * 0.5f, cy - step * 0.35f)
                 }
+                path.close()
+                drawPath(path, fill)
+                drawPath(path, stroke, style = Stroke(1f))
             }
         }
     }
 }
 
+/** Near-black navy with a grid of small muted diamonds. */
 @Composable
 private fun WinterBackground(modifier: Modifier = Modifier) {
-    val snowCount = 28
-    val snowflakes = remember {
-        List(snowCount) {
-            floatArrayOf(
-                Random.nextFloat(),
-                Random.nextFloat(),
-                0.4f + Random.nextFloat() * 0.9f,
-            )
-        }
-    }
-    val transition = rememberInfiniteTransition(label = "snow")
-    val progress by transition.animateFloat(
-        initialValue = 0f, targetValue = 1f,
-        animationSpec = infiniteRepeatable(tween(5000, easing = LinearEasing), RepeatMode.Restart),
-        label = "snowfall",
-    )
-    val paint = remember {
-        android.graphics.Paint().apply {
-            textSize = 20f
-            textAlign = android.graphics.Paint.Align.CENTER
-        }
-    }
     Canvas(modifier = modifier) {
-        drawRect(Color(0xFFE0EEF8))
-        drawIntoCanvas { canvas ->
-            for (sf in snowflakes) {
-                val x = sf[0] * size.width
-                val y = ((sf[1] + progress * sf[2]) % 1f) * size.height
-                canvas.nativeCanvas.drawText("❄️", x, y, paint)
+        drawRect(Color(0xFF030C1A))
+        val step = 52f
+        val fill = Color(0xFF0A1D30)
+        val stroke = Color(0xFF122540)
+        val rows = (size.height / step).toInt() + 3
+        val cols = (size.width / step).toInt() + 2
+        val ds = 10f  // half-size of diamond
+        for (row in -1..rows) {
+            val xOff = if (row % 2 == 0) 0f else step / 2
+            for (col in -1..cols) {
+                val cx = col * step + xOff
+                val cy = row * step
+                val path = Path()
+                path.moveTo(cx, cy - ds)
+                path.lineTo(cx + ds, cy)
+                path.lineTo(cx, cy + ds)
+                path.lineTo(cx - ds, cy)
+                path.close()
+                drawPath(path, fill)
+                drawPath(path, stroke, style = Stroke(1f))
             }
         }
     }
 }
 
+/** Very dark green with a honeycomb of hexagon outlines. */
 @Composable
 private fun SpringBackground(modifier: Modifier = Modifier) {
-    val paint = remember {
-        android.graphics.Paint().apply {
-            textSize = 28f
-            textAlign = android.graphics.Paint.Align.CENTER
-        }
-    }
-    val tulips = listOf("🌷", "🌸", "🌷", "🌼", "🌷", "💐", "🌸", "🌷")
     Canvas(modifier = modifier) {
-        drawRect(Color(0xFFFFFDE7))
-        drawIntoCanvas { canvas ->
-            val step = 70f
-            val rows = (size.height / step).toInt() + 2
-            val cols = (size.width / step).toInt() + 2
-            for (row in 0..rows) {
-                val xOff = if (row % 2 == 0) 0f else step / 2
-                val y = row * step * 0.82f + step * 0.4f
-                for (col in 0..cols) {
-                    val x = col * step + xOff
-                    val emoji = tulips[(row * (cols + 1) + col) % tulips.size]
-                    canvas.nativeCanvas.drawText(emoji, x, y, paint)
+        drawRect(Color(0xFF050F02))
+        val r = 28f
+        val hexW = r * 1.732f   // sqrt(3) * r
+        val hexH = r * 2f
+        val cols = (size.width / hexW).toInt() + 3
+        val rows = (size.height / (hexH * 0.75f)).toInt() + 3
+        val stroke = Color(0xFF0F2A08)
+        for (row in -1..rows) {
+            for (col in -1..cols) {
+                val xOff = if (row % 2 == 0) 0f else hexW / 2
+                val cx = col * hexW + xOff
+                val cy = row * hexH * 0.75f
+                val path = Path()
+                for (i in 0 until 6) {
+                    val angle = Math.toRadians((60.0 * i - 30)).toFloat()
+                    val x = cx + r * cos(angle)
+                    val y = cy + r * sin(angle)
+                    if (i == 0) path.moveTo(x, y) else path.lineTo(x, y)
                 }
+                path.close()
+                drawPath(path, Color(0xFF0A1F05))
+                drawPath(path, stroke, style = Stroke(1.2f))
             }
         }
     }
 }
 
+/** Very dark green with diagonal stripe bands. */
 @Composable
 private fun SummerBackground(modifier: Modifier = Modifier) {
-    val paint = remember {
-        android.graphics.Paint().apply {
-            textSize = 30f
-            textAlign = android.graphics.Paint.Align.CENTER
-        }
-    }
     Canvas(modifier = modifier) {
-        drawRect(Color(0xFF2E7D32))
-        drawIntoCanvas { canvas ->
-            val step = 78f
-            val rows = (size.height / step).toInt() + 2
-            val cols = (size.width / step).toInt() + 2
-            for (row in 0..rows) {
-                val xOff = if (row % 2 == 0) 0f else step / 2
-                val y = row * step * 0.82f + step * 0.4f
-                for (col in 0..cols) {
-                    val x = col * step + xOff
-                    canvas.nativeCanvas.drawText("☀️", x, y, paint)
-                }
-            }
+        drawRect(Color(0xFF021200))
+        val stripeWidth = 18f
+        val gap = 44f
+        val diagLen = size.width + size.height
+        var offset = -diagLen
+        while (offset < size.width + gap) {
+            val path = Path()
+            path.moveTo(offset, 0f)
+            path.lineTo(offset + stripeWidth, 0f)
+            path.lineTo(offset + stripeWidth + size.height, size.height)
+            path.lineTo(offset + size.height, size.height)
+            path.close()
+            drawPath(path, Color(0xFF072800))
+            offset += gap
         }
     }
 }

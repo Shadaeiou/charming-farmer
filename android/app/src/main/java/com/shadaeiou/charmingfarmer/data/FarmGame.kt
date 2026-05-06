@@ -22,14 +22,19 @@ enum class Season(val displayName: String, val emoji: String) {
     companion object {
         private val ORDER = listOf(SPRING, SUMMER, FALL, WINTER)
 
-        fun current(): Season {
-            val month = java.util.Calendar.getInstance().get(java.util.Calendar.MONTH) + 1
-            return when (month) {
-                3, 4, 5 -> SPRING
-                6, 7, 8 -> SUMMER
-                9, 10, 11 -> FALL
-                else -> WINTER
-            }
+        /** 30 real minutes per season; 30 s when skipTimers is on for rapid testing. */
+        val SEASON_MS: Long get() = if (DebugSettings.skipTimers) 30_000L else 30L * 60_000L
+        val CYCLE_MS: Long get() = SEASON_MS * 4
+
+        fun fromEpoch(epochMs: Long, nowMs: Long): Season {
+            val elapsed = (nowMs - epochMs).coerceAtLeast(0L)
+            return ORDER[((elapsed / SEASON_MS) % 4).toInt()]
+        }
+
+        /** 0.0 = start of Spring, 0.25 = start of Summer, 0.5 = Fall, 0.75 = Winter, 1.0 = Spring again. */
+        fun cycleProgress(epochMs: Long, nowMs: Long): Float {
+            val elapsed = (nowMs - epochMs).coerceAtLeast(0L)
+            return ((elapsed % CYCLE_MS).toFloat() / CYCLE_MS).coerceIn(0f, 1f)
         }
 
         /** How many seasons back from [current] until we hit a season in [plantSeasons]. */
@@ -233,11 +238,24 @@ class FarmGame(context: Context) {
     var feedbackBad: Boolean by mutableStateOf(false)
         private set
 
+    var seasonEpochMs: Long = 0L
+        private set
+
     init {
+        val stored = db.systemMeta().get("season_epoch")?.toLongOrNull()
+        seasonEpochMs = stored ?: System.currentTimeMillis().also { epoch ->
+            db.systemMeta().put("season_epoch", epoch.toString())
+        }
         if (state.lastTickMs == 0L) {
             state = state.copy(lastTickMs = System.currentTimeMillis())
         }
     }
+
+    fun currentSeason(nowMs: Long = System.currentTimeMillis()): Season =
+        Season.fromEpoch(seasonEpochMs, nowMs)
+
+    fun seasonCycleProgress(nowMs: Long = System.currentTimeMillis()): Float =
+        Season.cycleProgress(seasonEpochMs, nowMs)
 
     fun tick(nowMs: Long = System.currentTimeMillis()) {
         val s = state
@@ -279,7 +297,7 @@ class FarmGame(context: Context) {
 
     private fun handlePlant(s: FarmState, idx: Int, now: Long) {
         val crop = s.selectedSeed
-        val currentSeason = Season.current()
+        val currentSeason = currentSeason(now)
         if (currentSeason !in crop.plantSeasons) {
             val seasonOrder = listOf(Season.SPRING, Season.SUMMER, Season.FALL, Season.WINTER)
             val seasons = crop.plantSeasons
@@ -308,7 +326,7 @@ class FarmGame(context: Context) {
 
     private fun handlePlanted(s: FarmState, idx: Int, p: Plot, now: Long) {
         val crop = p.crop ?: return
-        val currentSeason = Season.current()
+        val currentSeason = currentSeason(now)
         if (p.isCropDead(currentSeason)) {
             state = s.copy(plots = s.plots.replaceAt(idx, Plot(kind = PlotKind.TILLED)))
             note("Cleared the dead ${crop.displayName.lowercase()} 💀")
@@ -401,7 +419,7 @@ class FarmGame(context: Context) {
 
     private fun handleTreeTap(s: FarmState, idx: Int, p: Plot, now: Long) {
         val tree = p.tree ?: return
-        val currentSeason = Season.current()
+        val currentSeason = currentSeason(now)
         val seasonOrder = listOf(Season.SPRING, Season.SUMMER, Season.FALL, Season.WINTER)
         when {
             p.treeIsDead(now) -> {

@@ -8,6 +8,15 @@ data class ReleaseNote(
 
 val CHANGELOG: List<ReleaseNote> = listOf(
     ReleaseNote(
+        version = "0.1.40",
+        date = "2026-05-06",
+        bullets = listOf(
+            "Season clock on the farm: a 4-quadrant dial (Spring top-right, Summer bottom-right, Fall bottom-left, Winter top-left) with a rotating hand shows exactly where you are in the 2-hour cycle",
+            "Seasons now run on a 30-minute game clock instead of the real-world calendar — each full cycle is 2 hours",
+            "Farm backgrounds redesigned: dark geometric patterns (triangles for fall, diamonds for winter, hexagons for spring, diagonal stripes for summer) — no emojis, muted dark-mode palette",
+        ),
+    ),
+    ReleaseNote(
         version = "0.1.38",
         date = "2026-05-06",
         bullets = listOf(
