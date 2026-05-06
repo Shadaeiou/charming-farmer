@@ -186,6 +186,9 @@ interface PlotDao {
 
     @Insert(onConflict = OnConflictStrategy.REPLACE)
     fun upsertAll(plots: List<PlotEntity>)
+
+    @Query("DELETE FROM plots")
+    fun deleteAll()
 }
 
 @Dao

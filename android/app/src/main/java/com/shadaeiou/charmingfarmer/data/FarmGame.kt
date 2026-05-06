@@ -181,6 +181,15 @@ data class Plot(
         return !treeIsDead(nowMs) && treeWindowsDue(nowMs) > harvestCount &&
             currentSeason !in t.harvestSeasons
     }
+
+    /** Fraction (0–1) of the current harvest interval elapsed since the last harvest.
+     *  Returns 0 right after a harvest (bar resets to green), 1 when the next harvest is ready. */
+    fun treeHarvestIntervalFraction(nowMs: Long): Float {
+        val t = tree ?: return 0f
+        if (DebugSettings.skipTimers) return 1f
+        val intervalStart = plantedAtMs + harvestCount.toLong() * t.harvestIntervalMs
+        return ((nowMs - intervalStart).toFloat() / t.harvestIntervalMs).coerceIn(0f, 1f)
+    }
 }
 
 data class Upgrade(
@@ -199,10 +208,26 @@ val UPGRADES = listOf(
     Upgrade("waterBonus", "Garden Hose", "+5% water bonus", 450, 2.9),
 )
 
+data class Goal(
+    val id: String,
+    val title: String,
+    val description: String,
+    val coinsRequired: Int,
+    val harvestsRequired: Int,
+    val newPlotCount: Int,
+)
+
+val FARM_GOALS = listOf(
+    Goal("expand_5x5", "Growing Room", "Expand to a 5×5 farm", 500, 25, 25),
+    Goal("expand_6x6", "Real Acreage", "Expand to a 6×6 farm", 2_000, 75, 36),
+    Goal("expand_7x7", "Serious Farm", "Expand to a 7×7 farm", 8_000, 150, 49),
+    Goal("expand_8x8", "Mega Farm", "Expand to an 8×8 farm", 30_000, 300, 64),
+)
+
 const val ENERGY_TILL = 3
 const val ENERGY_WATER = 1
 const val ENERGY_HARVEST = 1
-const val PLOT_COUNT = 16
+const val STARTING_PLOT_COUNT = 16
 const val STARTING_COINS = 5
 const val STARTING_ENERGY = 50
 const val MIN_REGEN_MS = 800L
@@ -220,8 +245,10 @@ data class FarmState(
         "maxEnergy" to 0, "regen" to 0,
         "growthSpeed" to 0, "sellBonus" to 0, "waterBonus" to 0,
     ),
-    val plots: List<Plot> = List(PLOT_COUNT) { Plot() },
+    val plotCount: Int = STARTING_PLOT_COUNT,
+    val plots: List<Plot> = List(STARTING_PLOT_COUNT) { Plot() },
     val birdsSeen: Map<String, Int> = emptyMap(),
+    val completedGoals: Set<String> = emptySet(),
 )
 
 class FarmGame(context: Context) {
@@ -526,7 +553,8 @@ class FarmGame(context: Context) {
                 selectedSeed = CropType.CARROT.name,
                 selectedTree = null,
             ))
-            db.plots().upsertAll(List(PLOT_COUNT) {
+            db.plots().deleteAll()
+            db.plots().upsertAll(List(STARTING_PLOT_COUNT) {
                 PlotEntity(
                     position = it,
                     kind = PlotKind.GRASS.name,
@@ -538,6 +566,8 @@ class FarmGame(context: Context) {
                     harvestCount = 0,
                 )
             })
+            db.systemMeta().put("plot_count", STARTING_PLOT_COUNT.toString())
+            db.systemMeta().put("completed_goals", "")
         }
         state = load()
         note("Fresh start!")
@@ -567,6 +597,26 @@ class FarmGame(context: Context) {
     fun addCoins(amount: Int) {
         if (amount == 0) return
         state = state.copy(coins = state.coins + amount)
+        save()
+    }
+
+    fun completeGoal(goalId: String) {
+        val goal = FARM_GOALS.find { it.id == goalId } ?: return
+        val s = state
+        if (goalId in s.completedGoals) return
+        if (s.coins < goal.coinsRequired || s.harvested < goal.harvestsRequired) {
+            fail("Need 🪙${goal.coinsRequired} coins and ${goal.harvestsRequired} harvests")
+            return
+        }
+        val newPlots = if (goal.newPlotCount > s.plots.size) {
+            s.plots + List(goal.newPlotCount - s.plots.size) { Plot() }
+        } else s.plots
+        state = s.copy(
+            plotCount = goal.newPlotCount,
+            completedGoals = s.completedGoals + goalId,
+            plots = newPlots,
+        )
+        note("🎉 ${goal.title}! Farm expanded!")
         save()
     }
 
@@ -626,20 +676,19 @@ class FarmGame(context: Context) {
             db.birdsSeen().upsertAll(s.birdsSeen
                 .filter { it.value > 0 }
                 .map { BirdSeenEntity(it.key, it.value) })
+            db.systemMeta().put("plot_count", s.plotCount.toString())
+            db.systemMeta().put("completed_goals", s.completedGoals.joinToString(","))
         }
     }
 
     private fun load(): FarmState {
         val gs = db.gameState().getOrNull() ?: return seedNewGameState()
+        val plotCount = db.systemMeta().get("plot_count")?.toIntOrNull() ?: STARTING_PLOT_COUNT
+        val completedGoals = db.systemMeta().get("completed_goals")
+            ?.split(",")?.filter { it.isNotBlank() }?.toSet() ?: emptySet()
         val plotRows = db.plots().getAll().sortedBy { it.position }
-        val plots: List<Plot> = if (plotRows.size == PLOT_COUNT) {
-            plotRows.map { row -> rowToPlot(row) }
-        } else {
-            // Either the table is empty (fresh install, no plots row yet)
-            // or some rows are missing (unusual). Fall back to grass and
-            // overwrite on first save.
-            List(PLOT_COUNT) { Plot() }
-        }
+        val plotMap = plotRows.associateBy { it.position }
+        val plots = List(plotCount) { idx -> plotMap[idx]?.let { rowToPlot(it) } ?: Plot() }
         val upMap: MutableMap<String, Int> = db.upgradeLevels().getAll()
             .associate { it.key to it.level }
             .toMutableMap()
@@ -662,8 +711,10 @@ class FarmGame(context: Context) {
                 runCatching { TreeType.valueOf(it) }.getOrNull()
             },
             upgradeLevels = upMap,
+            plotCount = plotCount,
             plots = plots,
             birdsSeen = birdsMap,
+            completedGoals = completedGoals,
         )
     }
 

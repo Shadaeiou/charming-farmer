@@ -79,8 +79,10 @@ import androidx.compose.ui.unit.sp
 import androidx.compose.ui.window.Popup
 import androidx.compose.ui.window.PopupPositionProvider
 import com.shadaeiou.charmingfarmer.data.CropType
+import com.shadaeiou.charmingfarmer.data.FARM_GOALS
 import com.shadaeiou.charmingfarmer.data.FarmGame
 import com.shadaeiou.charmingfarmer.data.FarmState
+import com.shadaeiou.charmingfarmer.data.Goal
 import com.shadaeiou.charmingfarmer.data.Plot
 import com.shadaeiou.charmingfarmer.data.PlotKind
 import com.shadaeiou.charmingfarmer.data.Season
@@ -181,6 +183,8 @@ fun HomeScreen(onOpenSettings: () -> Unit, onOpenMap: () -> Unit) {
                 TreeNursery(state, currentSeason, onSelect = { game.selectTree(it) })
                 Spacer(Modifier.height(6.dp))
                 UpgradesRow(state, costFn = game::upgradeCost, onBuy = { game.buyUpgrade(it) })
+                Spacer(Modifier.height(4.dp))
+                GoalsSection(state, onClaim = { game.completeGoal(it) })
                 Spacer(Modifier.height(4.dp))
             }
         }
@@ -297,6 +301,15 @@ private fun FarmGrid(
     modifier: Modifier = Modifier,
     onPlotClick: (Int) -> Unit,
 ) {
+    val gridCols = when {
+        s.plotCount <= 16 -> 4
+        s.plotCount <= 25 -> 5
+        s.plotCount <= 36 -> 6
+        s.plotCount <= 49 -> 7
+        else -> 8
+    }
+    val gridRows = s.plotCount / gridCols
+
     BoxWithConstraints(modifier = modifier.fillMaxWidth()) {
         val gridSize = minOf(maxWidth, maxHeight)
         Box(
@@ -312,15 +325,15 @@ private fun FarmGrid(
                 modifier = Modifier.fillMaxSize(),
                 verticalArrangement = Arrangement.spacedBy(6.dp),
             ) {
-                for (r in 0 until 4) {
+                for (r in 0 until gridRows) {
                     Row(
                         modifier = Modifier.weight(1f).fillMaxWidth(),
                         horizontalArrangement = Arrangement.spacedBy(6.dp),
                     ) {
-                        for (c in 0 until 4) {
-                            val idx = r * 4 + c
+                        for (c in 0 until gridCols) {
+                            val idx = r * gridCols + c
                             PlotCell(
-                                plot = s.plots[idx],
+                                plot = s.plots.getOrElse(idx) { com.shadaeiou.charmingfarmer.data.Plot() },
                                 nowMs = nowMs,
                                 currentSeason = currentSeason,
                                 modifier = Modifier.weight(1f).fillMaxHeight(),
@@ -407,30 +420,35 @@ private fun PlotCell(plot: Plot, nowMs: Long, currentSeason: Season, modifier: M
                         color = Color.White.copy(alpha = 0.8f),
                         modifier = Modifier.align(Alignment.TopEnd).padding(2.dp),
                     )
-                    val lifeFrac = plot.treeLifeFraction(nowMs)
-                    val animLife by animateFloatAsState(lifeFrac, tween(300), label = "life")
-                    Box(
-                        Modifier
-                            .align(Alignment.BottomCenter)
-                            .padding(horizontal = 4.dp, vertical = 4.dp)
-                            .fillMaxWidth()
-                            .height(4.dp)
-                            .clip(RoundedCornerShape(2.dp))
-                            .background(Color(0x66000000)),
-                    ) {
+                    val allHarvestsDone = plot.harvestCount >= tree.maxHarvests
+                    if (!allHarvestsDone) {
+                        val harvestFrac = plot.treeHarvestIntervalFraction(nowMs)
+                        val animHarvestFrac by animateFloatAsState(harvestFrac, tween(300), label = "harvest")
+                        val barColor = when {
+                            treeWrongSeason -> Color(0xFF9E9E9E)
+                            else -> Color(
+                                red = (0x7D + (0xFF - 0x7D) * harvestFrac) / 255f,
+                                green = (0xB8 + (0xD2 - 0xB8) * harvestFrac) / 255f,
+                                blue = (0x7D + (0x4A - 0x7D) * harvestFrac) / 255f,
+                            )
+                        }
                         Box(
                             Modifier
-                                .fillMaxWidth(1f - animLife)
-                                .fillMaxHeight()
+                                .align(Alignment.BottomCenter)
+                                .padding(horizontal = 4.dp, vertical = 4.dp)
+                                .fillMaxWidth()
+                                .height(4.dp)
                                 .clip(RoundedCornerShape(2.dp))
-                                .background(
-                                    when {
-                                        treeWrongSeason -> Color(0xFF9E9E9E)
-                                        treeReady -> ReadyColor
-                                        else -> Color(0xFF7DB87D)
-                                    }
-                                ),
-                        )
+                                .background(Color(0x66000000)),
+                        ) {
+                            Box(
+                                Modifier
+                                    .fillMaxWidth(animHarvestFrac)
+                                    .fillMaxHeight()
+                                    .clip(RoundedCornerShape(2.dp))
+                                    .background(barColor),
+                            )
+                        }
                     }
                 }
             }
@@ -973,6 +991,81 @@ private fun SummerBackground(modifier: Modifier = Modifier) {
             path.close()
             drawPath(path, Color(0xFF072800))
             offset += gap
+        }
+    }
+}
+
+@Composable
+private fun GoalsSection(s: FarmState, onClaim: (String) -> Unit) {
+    val nextGoal = FARM_GOALS.firstOrNull { it.id !in s.completedGoals } ?: return
+    val coinsOk = s.coins >= nextGoal.coinsRequired
+    val harvestsOk = s.harvested >= nextGoal.harvestsRequired
+    val canClaim = coinsOk && harvestsOk
+    Card(
+        modifier = Modifier.fillMaxWidth(),
+        colors = CardDefaults.cardColors(containerColor = MaterialTheme.colorScheme.surface),
+        elevation = CardDefaults.cardElevation(defaultElevation = 2.dp),
+    ) {
+        Column(Modifier.padding(10.dp)) {
+            Row(
+                Modifier.fillMaxWidth(),
+                horizontalArrangement = Arrangement.SpaceBetween,
+                verticalAlignment = Alignment.CenterVertically,
+            ) {
+                Text(
+                    "🎯 ${nextGoal.title}",
+                    style = MaterialTheme.typography.titleSmall,
+                    fontWeight = FontWeight.Bold,
+                )
+                if (canClaim) {
+                    Box(
+                        modifier = Modifier
+                            .clip(RoundedCornerShape(6.dp))
+                            .background(MaterialTheme.colorScheme.primary)
+                            .clickable { onClaim(nextGoal.id) }
+                            .padding(horizontal = 10.dp, vertical = 4.dp),
+                    ) {
+                        Text(
+                            "Claim!",
+                            style = MaterialTheme.typography.labelMedium,
+                            fontWeight = FontWeight.Bold,
+                            color = MaterialTheme.colorScheme.onPrimary,
+                        )
+                    }
+                }
+            }
+            Spacer(Modifier.height(4.dp))
+            Row(
+                Modifier.fillMaxWidth(),
+                horizontalArrangement = Arrangement.spacedBy(8.dp),
+            ) {
+                Column(Modifier.weight(1f)) {
+                    Text(
+                        "🪙 ${prettyCoins(s.coins)} / ${prettyCoins(nextGoal.coinsRequired)}",
+                        style = MaterialTheme.typography.labelSmall,
+                        color = if (coinsOk) Color(0xFF2E7D32) else MaterialTheme.colorScheme.onSurfaceVariant,
+                    )
+                    LinearProgressIndicator(
+                        progress = { (s.coins.toFloat() / nextGoal.coinsRequired).coerceIn(0f, 1f) },
+                        modifier = Modifier.fillMaxWidth().height(5.dp).clip(RoundedCornerShape(3.dp)),
+                        color = if (coinsOk) Color(0xFF2E7D32) else MaterialTheme.colorScheme.primary,
+                        trackColor = MaterialTheme.colorScheme.surfaceVariant,
+                    )
+                }
+                Column(Modifier.weight(1f)) {
+                    Text(
+                        "🌾 ${s.harvested} / ${nextGoal.harvestsRequired}",
+                        style = MaterialTheme.typography.labelSmall,
+                        color = if (harvestsOk) Color(0xFF2E7D32) else MaterialTheme.colorScheme.onSurfaceVariant,
+                    )
+                    LinearProgressIndicator(
+                        progress = { (s.harvested.toFloat() / nextGoal.harvestsRequired).coerceIn(0f, 1f) },
+                        modifier = Modifier.fillMaxWidth().height(5.dp).clip(RoundedCornerShape(3.dp)),
+                        color = if (harvestsOk) Color(0xFF2E7D32) else MaterialTheme.colorScheme.primary,
+                        trackColor = MaterialTheme.colorScheme.surfaceVariant,
+                    )
+                }
+            }
         }
     }
 }

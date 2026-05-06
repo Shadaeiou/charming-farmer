@@ -8,6 +8,17 @@ data class ReleaseNote(
 
 val CHANGELOG: List<ReleaseNote> = listOf(
     ReleaseNote(
+        version = "0.1.44",
+        date = "2026-05-06",
+        bullets = listOf(
+            "🎯 Goals system — complete milestones (coins + harvests) to expand your farm from 4×4 all the way up to 8×8",
+            "Four expansion goals: Growing Room (5×5), Real Acreage (6×6), Serious Farm (7×7), Mega Farm (8×8)",
+            "Tree plots now show a green-to-yellow harvest-interval bar that fills toward each harvest window and resets to full green after you collect",
+            "🦜 Birdwatching speeds up over your session — birds get faster until they plateau at 3× after 8 minutes",
+            "Flying litter now drifts through the sky: tap a balloon, paper, leaf, kite, or newspaper by mistake and get a 💥 explosion instead of coins",
+        ),
+    ),
+    ReleaseNote(
         version = "0.1.43",
         date = "2026-05-06",
         bullets = listOf(
