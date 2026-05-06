@@ -1,12 +1,82 @@
 # CLAUDE.md
 
-Project-specific rules for Claude Code working on this repo. Read this before making any changes.
+```
+╔══════════════════════════════════════════════════════════════════╗
+║  STOP. READ THIS WHOLE FILE BEFORE EDITING ANY KOTLIN CODE.      ║
+║                                                                  ║
+║  Past sessions broke CI 5+ times by skimming. The mistakes are   ║
+║  all listed here. None of them are subtle once you've read this. ║
+╚══════════════════════════════════════════════════════════════════╝
+```
 
-## Branching
+Project-specific rules for Claude Code working on this repo. The repo has multiple Claude sessions touching it concurrently — your job is to leave it in the same shape they expect.
 
-- **Always commit and push directly to `main`.** Never create feature branches; the user can't trigger CI from anything else.
-- The `Build Android` workflow only fires on `push` to `main` (or `v*` tags). A push to any other branch produces no APK.
-- Don't open pull requests — just push.
+---
+
+## ⚠️ Things every prior session has gotten wrong (read these first)
+
+These are not theoretical. Every one of them has broken `compileReleaseKotlin` or shipped a bad release. Each one cost real time. **Verify these BEFORE every commit.**
+
+### 1. Compose APIs need explicit imports — you cannot inline-qualify them
+
+Writing `androidx.compose.material.icons.Icons.Filled.LocalShipping` does **not** auto-resolve. Compose icons (and many other Compose APIs) are extension properties that need their own `import` line. Same shape for `nativeCanvas`, `remember`, `mutableStateOf`, `LaunchedEffect`, `DisposableEffect`, `mutableLongStateOf`, `mutableStateListOf`, `nativeCanvas`, etc.
+
+| Symbol | Required import |
+|---|---|
+| `Icons.Filled.LocalShipping` | `import androidx.compose.material.icons.filled.LocalShipping` |
+| `Icons.Filled.Map` | `import androidx.compose.material.icons.filled.Map` |
+| `Icons.Filled.Settings` | `import androidx.compose.material.icons.filled.Settings` |
+| `Icons.AutoMirrored.Filled.ArrowBack` | `import androidx.compose.material.icons.automirrored.filled.ArrowBack` |
+| `canvas.nativeCanvas` | `import androidx.compose.ui.graphics.nativeCanvas` |
+| `remember`, `mutableStateOf`, etc. | `import androidx.compose.runtime.<Name>` |
+
+**Before committing, run this in your head:** "Did I add a new `Icons.X.Y` reference, a new `LaunchedEffect`, or any other Compose call that wasn't in this file before? If yes, did I add the import?" Compose drift bugs have happened **three times** so far.
+
+### 2. The changelog version label is mechanical — never invent one
+
+The label MUST be `"0.1.<N>"` where `<N>` is the upcoming git commit count. The build hard-codes `versionName = "0.1.$gitCommits"` in `build.gradle.kts`. If you write `"0.2.0"` because it feels like a big release, the in-app changelog will say `0.2.0` while Settings shows `0.1.41`. **This has happened multiple times.**
+
+```bash
+# Run this BEFORE writing the changelog entry — paste the result as the version label
+echo "0.1.$(($(git rev-list --count HEAD) + 1))"
+```
+
+If you need a version that visibly bumps, change the `versionName` template in `build.gradle.kts` first, then use the matching label. The label and the build must match.
+
+### 3. New timer-gated mechanics MUST honor `DebugSettings.skipTimers`
+
+The Settings screen has a "Skip timers" debug toggle. If you add a new mechanic with a real-time clock (a brewery stage, a transport trip, a kiln, an animal feeding interval, anything) and don't gate it on `DebugSettings.skipTimers`, the toggle silently does nothing for your feature. Players use this to test, and silent breakage is the worst kind of bug.
+
+```kotlin
+fun isComplete(nowMs: Long): Boolean =
+    DebugSettings.skipTimers || nowMs - startMs >= durationMs
+```
+
+### 4. New `var foo by mutableStateOf(...)` + `fun setFoo(...)` will not compile
+
+The property auto-generates a JVM `setFoo(Z)V` setter. A hand-written `fun setFoo(value: Boolean)` collides on the same JVM signature → "Platform declaration clash" → CI failure. **Name your setter `updateFoo`, `applyFoo`, or anything that doesn't start with `set<PropertyName>`.**
+
+### 5. No new SharedPreferences. Ever.
+
+Game data + UI state + debug toggles all live in **Room** (`charming-farmer.db`). The only `SharedPreferences` reads remaining are inside `LegacyMigrator`, which is read-only. If you need a single key/value pair, add it to the `system_meta` table.
+
+### 6. Always commit and push directly to `main`
+
+The CI workflow only fires on push to `main` (or `v*` tags). Feature branches produce no APK and the user can't test them. **Never create a feature branch. Never open a PR.** Just push to main.
+
+### 7. Pre-commit checklist (5 seconds, save 5 minutes)
+
+Run through this list before every `git commit`:
+
+- [ ] Did I add new Compose API calls? → Check imports.
+- [ ] Did I add a player-visible change? → Add a changelog entry with the right version label.
+- [ ] Did I add a timer? → Gate it on `DebugSettings.skipTimers`.
+- [ ] Did I add a new persistent field? → Did I add the Room migration?
+- [ ] Did I add a new property + setter function? → Make sure they don't collide on JVM.
+- [ ] Am I on `main`? Am I about to push to `main`? (`git branch --show-current`)
+- [ ] Did I read all of CLAUDE.md? If you said yes but skipped this checklist, you didn't.
+
+---
 
 ## Save data must survive every update
 
@@ -50,12 +120,6 @@ Room.databaseBuilder(...)
 **Always keep all prior migrations in `addMigrations()`.** Players can be on any old version; Room walks the chain from where they are.
 
 If you ever truly cannot migrate (catastrophic schema change), gate it behind the `system_meta` table and write a Kotlin-level migration that reads old rows and writes new ones before dropping the old table. Never call `fallbackToDestructiveMigration()` — that drops player data.
-
-### Persistence is 100% Room
-
-Game data, UI state (last-visited screen), debug toggles — everything lives in Room. **Don't introduce new `SharedPreferences` files.** The only remaining `SharedPreferences` reads in the codebase are inside [`LegacyMigrator`](android/app/src/main/java/com/shadaeiou/charmingfarmer/data/room/LegacyMigrator.kt), which copies the original pre-Room blobs over once.
-
-If you need a one-key-value pair, add it to `system_meta` with a typed key constant in the file that owns the data.
 
 ### Legacy SharedPreferences
 
@@ -231,14 +295,6 @@ When you add a new playable location, touch all of these in one commit:
 9. Changelog entry — yes, this is player-visible
 
 Forgetting #2 makes the transport panel show no destinations from this location. Forgetting #8 means tapping the tile crashes navigation.
-
-## Compose pitfalls that have bitten me
-
-I can't run a local build, so these cost a CI cycle each. Watch for them:
-
-- **Missing imports for inline-qualified Compose APIs.** Writing `androidx.compose.material.icons.Icons.Filled.LocalShipping` doesn't auto-resolve — `LocalShipping` is an extension property on `Icons.Filled` from the `material-icons-extended` artifact, and it requires `import androidx.compose.material.icons.filled.LocalShipping` to be visible. Same shape for any `Icons.Filled.*` you haven't used in this file before. Always add the explicit import.
-- **`var foo by mutableStateOf(...)` + `fun setFoo(...)` collide on JVM.** The property auto-generates a `setFoo(Z)V` setter; a hand-written function with the same name produces "Platform declaration clash" at compile time. Fix: name the function `updateFoo`, `applyFoo`, or anything that isn't `set<Property>`.
-- **Adding a new Compose API call to a file means checking imports.** The `remember`, `mutableStateOf`, `LaunchedEffect`, `DisposableEffect`, `mutableLongStateOf`, `mutableStateListOf` set drifts per file. When I add the first call of one of those to a screen, I need to verify it's imported.
 
 ## Code style
 
