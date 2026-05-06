@@ -54,7 +54,8 @@ data class GameStateEntity(
     }
 }
 
-/** One row per plot position (0..PLOT_COUNT - 1). */
+/** One row per plot position (0..plotCount - 1). plotCount expands as
+ *  the player completes farm-expansion goals (16 → 25 → 36 → 49 → 64). */
 @Entity(tableName = "plots")
 data class PlotEntity(
     @PrimaryKey val position: Int,
