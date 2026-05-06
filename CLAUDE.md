@@ -10,18 +10,48 @@ Project-specific rules for Claude Code working on this repo. Read this before ma
 
 ## Save data must survive every update
 
-The game persists state to `SharedPreferences` under key `charming-farmer-v1` in [`FarmGame.kt`](android/app/src/main/java/com/shadaeiou/charmingfarmer/data/FarmGame.kt). Players have farms with hours of progress in there. Treat the save format like a public API.
+Persistence lives in **Room** ([`data/room/AppDatabase.kt`](android/app/src/main/java/com/shadaeiou/charmingfarmer/data/room/AppDatabase.kt), database file `charming-farmer.db`). The legacy SharedPreferences blobs (`charming-farmer-v1`, `charming-farmer-transport-v1`) are still on disk for one release as a rollback safety net, but the source of truth is now the Room schema. `FarmGame` and `TransportService` both read/write via DAOs.
+
+Players have farms with hours of real progress sitting in these tables. Treat the schema like a public API.
 
 **Hard rules:**
 
-- **Never rename the prefs key** (`charming-farmer-v1`). A rename = every user starts from scratch.
-- **Never delete or rename existing JSON fields** when persisting (`energy`, `coins`, `plots[].kind`, etc.). `FarmGame.save()` and `FarmGame.load()` must stay round-trip compatible.
-- **Adding new fields is fine** — but `load()` must default them sensibly via `optInt` / `optLong` / `optString(...).takeIf { ... }` so old saves without that field still load.
-- **Renaming an enum value** (e.g. `CropType.CARROT` → `CropType.ROOT_VEGGIE`) silently breaks every save that contains the old name. If it has to happen, write a migration: read the old name in `load()`, map it to the new one. Don't rely on `valueOf()` alone.
-- **Removing a `CropType` entirely** orphans every plot planted with it. Migrate those plots to `Plot()` (empty grass) inside `load()`, don't crash.
-- **If you ever bump the prefs key intentionally** (rare, only for a deliberately destructive schema change), add migration code that reads the old key and writes the new one before clearing — never just drop user data.
+- **Never rename or drop a column without a Room migration.** Bump `AppDatabase.version` and supply a `Migration` that ALTER TABLEs the existing data into the new shape. Never just edit the entity in place — that crashes on every existing install.
+- **Adding a column is OK** if you provide a `defaultValue` in the `@ColumnInfo` annotation OR ship the migration that ALTERs it in. Don't rely on Kotlin defaults; SQLite needs the value at the column level.
+- **Adding a table is OK** with a `CREATE TABLE` migration. Forgetting the migration crashes the next launch.
+- **Renaming an enum value** (e.g. `CropType.CARROT` → `CropType.ROOT_VEGGIE`) silently breaks every plot that contains the old name. If it has to happen, write a Room migration that runs `UPDATE plots SET crop = 'ROOT_VEGGIE' WHERE crop = 'CARROT'`. Don't just rely on `valueOf()` failing into a default.
+- **Removing a `CropType` / `TreeType` / `ItemType` entirely** orphans every row that references it. Decoders already revert orphaned plots/stacks defensively, but a migration that scrubs the dead rows is the clean version.
+- **Never wipe user data without a clear "fresh start" gesture.** `FarmGame.reset()` is the only legit erase path, and even it leaves `inventory_stacks` alone because silos belong to the location, not the farm save.
 
 When in doubt: load, don't crash, never wipe.
+
+### Adding a Room migration (cookbook)
+
+```kotlin
+// 1. Bump the version
+@Database(entities = [...], version = 2, exportSchema = false)
+abstract class AppDatabase : RoomDatabase() { ... }
+
+// 2. Define the migration
+val MIGRATION_1_2 = object : Migration(1, 2) {
+    override fun migrate(db: SupportSQLiteDatabase) {
+        db.execSQL("ALTER TABLE plots ADD COLUMN soil_quality INTEGER NOT NULL DEFAULT 50")
+    }
+}
+
+// 3. Wire it into the builder in AppDatabase.build()
+Room.databaseBuilder(...)
+    .addMigrations(MIGRATION_1_2)
+    .build()
+```
+
+If you ever truly cannot migrate (catastrophic schema change), gate it behind the `system_meta` table and write a Kotlin-level migration that reads old rows and writes new ones before dropping the old table. Never call `fallbackToDestructiveMigration()` — that drops player data.
+
+### Legacy SharedPreferences
+
+- [`LegacyMigrator`](android/app/src/main/java/com/shadaeiou/charmingfarmer/data/room/LegacyMigrator.kt) runs once on first Room load and copies the old prefs blobs into Room. It's idempotent (gated by `system_meta.migrated_from_prefs`) so leaving it in place forever is fine.
+- The original prefs files are not deleted. After we ship a release or two with Room stable on real devices, delete the prefs files in a future commit.
+- **Do not write to those prefs keys anymore.** Anything new lives in Room.
 
 ## Changelog
 
