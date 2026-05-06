@@ -114,7 +114,7 @@ fun MalthouseScreen(onBack: () -> Unit, onOpenMap: () -> Unit) {
     Scaffold(
         topBar = {
             TopAppBar(
-                title = { Text("🌾 Malthouse", fontWeight = FontWeight.Bold) },
+                title = { Text("🏭 Malthouse", fontWeight = FontWeight.Bold) },
                 navigationIcon = {
                     IconButton(onClick = onBack) {
                         Icon(Icons.AutoMirrored.Filled.ArrowBack, contentDescription = "Back")

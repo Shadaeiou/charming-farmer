@@ -21,11 +21,38 @@ import org.json.JSONObject
  */
 enum class Location(val displayName: String, val emoji: String) {
     FARM("Farm", "🌾"),
-    MALTHOUSE("Malthouse", "🌾"),
+    MALTHOUSE("Malthouse", "🏭"),
     BREWERY("Brewery", "🍺"),
     KITCHEN("Kitchen", "🍳"),
     MARKET("Market", "🏪"),
     CELLAR("Cellar", "🍷"),
+    ;
+
+    /**
+     * What this location is willing to receive. Drives the transport
+     * panel's per-item destination chips so the player only sees
+     * sensible routes (no "ship hops to the malthouse").
+     *
+     * FARM is a catch-all return location — anything can come back to
+     * the silo. MARKET sells anything. Specialised locations only
+     * accept inputs to their actual processes.
+     */
+    fun accepts(item: ItemType): Boolean = when (this) {
+        FARM -> true
+        MALTHOUSE -> item in MALTING_GRAINS
+        BREWERY -> item in BREWERY_INPUTS || item.name.startsWith("HOPS")
+            || item.name.startsWith("YEAST_") || item.name.startsWith("MALT_")
+        KITCHEN -> false   // not built yet
+        MARKET -> true
+        CELLAR -> item.name.startsWith("BEER_")
+    }
+
+    companion object {
+        private val MALTING_GRAINS = setOf(
+            ItemType.BARLEY, ItemType.WHEAT_GRAIN, ItemType.OATS, ItemType.RYE,
+        )
+        private val BREWERY_INPUTS = setOf(ItemType.HOPS)
+    }
 }
 
 enum class VehicleType(

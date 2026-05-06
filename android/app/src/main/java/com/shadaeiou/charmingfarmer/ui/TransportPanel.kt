@@ -150,41 +150,55 @@ fun TransportPanel(
                                     fontWeight = FontWeight.Bold,
                                 )
                             }
-                            Spacer(Modifier.height(4.dp))
-                            Row(
-                                horizontalArrangement = Arrangement.spacedBy(4.dp),
-                            ) {
-                                allowedDestinations.forEach { dest ->
-                                    Button(
-                                        onClick = {
-                                            val veh = pickVehicle(transport, 1, nowMs)
-                                            if (veh == null) {
-                                                feedback = "All vehicles in transit"
-                                                feedbackBad = true
-                                                return@Button
-                                            }
-                                            val trip = transport.ship(
-                                                from = origin,
-                                                to = dest,
-                                                type = type,
-                                                amount = 1,
-                                                vehicle = veh,
-                                                nowMs = System.currentTimeMillis(),
+                            Spacer(Modifier.height(6.dp))
+                            // Filter destinations to only those that accept this
+                            // item — no shipping hops to the malthouse.
+                            val acceptedDestinations = allowedDestinations.filter { it.accepts(type) }
+                            if (acceptedDestinations.isEmpty()) {
+                                Text(
+                                    "Nowhere to send this from here.",
+                                    style = MaterialTheme.typography.labelSmall,
+                                    color = MaterialTheme.colorScheme.onSurfaceVariant,
+                                )
+                            } else {
+                                Column(verticalArrangement = Arrangement.spacedBy(4.dp)) {
+                                    acceptedDestinations.forEach { dest ->
+                                        Button(
+                                            onClick = {
+                                                val veh = pickVehicle(transport, 1, nowMs)
+                                                if (veh == null) {
+                                                    feedback = "All vehicles in transit"
+                                                    feedbackBad = true
+                                                    return@Button
+                                                }
+                                                val trip = transport.ship(
+                                                    from = origin,
+                                                    to = dest,
+                                                    type = type,
+                                                    amount = 1,
+                                                    vehicle = veh,
+                                                    nowMs = System.currentTimeMillis(),
+                                                )
+                                                if (trip == null) {
+                                                    feedback = "Couldn't ship that"
+                                                    feedbackBad = true
+                                                } else {
+                                                    feedback = "Sent 1 ${type.displayName} → ${dest.displayName}"
+                                                    feedbackBad = false
+                                                }
+                                            },
+                                            modifier = Modifier.fillMaxWidth(),
+                                            contentPadding = PaddingValues(horizontal = 12.dp, vertical = 8.dp),
+                                            colors = ButtonDefaults.buttonColors(
+                                                containerColor = MaterialTheme.colorScheme.primary,
+                                            ),
+                                        ) {
+                                            Text(
+                                                "→ ${dest.emoji}  ${dest.displayName}",
+                                                style = MaterialTheme.typography.bodyMedium,
+                                                fontWeight = FontWeight.Bold,
                                             )
-                                            if (trip == null) {
-                                                feedback = "Couldn't ship that"
-                                                feedbackBad = true
-                                            } else {
-                                                feedback = "Sent 1 ${type.displayName} → ${dest.displayName}"
-                                                feedbackBad = false
-                                            }
-                                        },
-                                        contentPadding = PaddingValues(horizontal = 8.dp, vertical = 4.dp),
-                                        colors = ButtonDefaults.buttonColors(
-                                            containerColor = MaterialTheme.colorScheme.primary,
-                                        ),
-                                    ) {
-                                        Text("→ ${dest.emoji}", style = MaterialTheme.typography.labelSmall)
+                                        }
                                     }
                                 }
                             }
