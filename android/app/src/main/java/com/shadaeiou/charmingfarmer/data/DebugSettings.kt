@@ -50,12 +50,15 @@ object DebugSettings {
         }
     }
 
-    fun setSkipTimers(value: Boolean) {
+    // Named with the `update` prefix instead of `set` so they don't
+    // collide with the synthetic setSkipTimers / setInfiniteEnergy
+    // JVM setters Kotlin generates for the properties above.
+    fun updateSkipTimers(value: Boolean) {
         skipTimers = value
         db?.systemMeta()?.put(KEY_SKIP_TIMERS, value.toString())
     }
 
-    fun setInfiniteEnergy(value: Boolean) {
+    fun updateInfiniteEnergy(value: Boolean) {
         infiniteEnergy = value
         db?.systemMeta()?.put(KEY_INFINITE_ENERGY, value.toString())
     }

@@ -229,14 +229,14 @@ private fun DebugSection() {
         title = "Skip timers",
         description = "Crops grow instantly, kilns finish on start, transport trips arrive on dispatch, fish bite the moment you cast.",
         checked = DebugSettings.skipTimers,
-        onChange = { DebugSettings.setSkipTimers(it) },
+        onChange = { DebugSettings.updateSkipTimers(it) },
     )
     Spacer(Modifier.height(8.dp))
     DebugToggleRow(
         title = "Infinite energy",
         description = "Actions never deplete the energy bar; it stays pinned at max while this is on.",
         checked = DebugSettings.infiniteEnergy,
-        onChange = { DebugSettings.setInfiniteEnergy(it) },
+        onChange = { DebugSettings.updateInfiniteEnergy(it) },
     )
 
     Spacer(Modifier.height(12.dp))
