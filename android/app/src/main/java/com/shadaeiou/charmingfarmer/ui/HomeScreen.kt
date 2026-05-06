@@ -18,6 +18,7 @@ import androidx.compose.foundation.layout.Arrangement
 import androidx.compose.foundation.layout.Box
 import androidx.compose.foundation.layout.BoxWithConstraints
 import androidx.compose.foundation.layout.Column
+import androidx.compose.foundation.layout.IntrinsicSize
 import androidx.compose.foundation.layout.Row
 import androidx.compose.foundation.layout.Spacer
 import androidx.compose.foundation.layout.fillMaxHeight
@@ -170,35 +171,35 @@ fun HomeScreen(onOpenSettings: () -> Unit, onOpenMap: () -> Unit) {
                     .padding(padding)
                     .padding(horizontal = 12.dp, vertical = 8.dp),
             ) {
-                StatCards(state)
+                StatCards(state, seasonCycleProgress)
                 Spacer(Modifier.height(4.dp))
                 SeasonBanner(currentSeason)
-                Spacer(Modifier.height(4.dp))
+                Spacer(Modifier.height(2.dp))
                 FeedbackText(game.feedback, game.feedbackBad)
+                Spacer(Modifier.height(2.dp))
+                FarmGrid(state, nowMs, currentSeason, modifier = Modifier.weight(1f), onPlotClick = { game.clickPlot(it) })
                 Spacer(Modifier.height(4.dp))
-                FarmGrid(state, nowMs, currentSeason, seasonCycleProgress, modifier = Modifier.weight(1f), onPlotClick = { game.clickPlot(it) })
-                Spacer(Modifier.height(6.dp))
                 SeedShelf(state, currentSeason, onSelect = { game.selectSeed(it) })
-                Spacer(Modifier.height(4.dp))
+                Spacer(Modifier.height(2.dp))
                 TreeNursery(state, currentSeason, onSelect = { game.selectTree(it) })
-                Spacer(Modifier.height(6.dp))
+                Spacer(Modifier.height(4.dp))
                 UpgradesRow(state, costFn = game::upgradeCost, onBuy = { game.buyUpgrade(it) })
-                Spacer(Modifier.height(4.dp))
+                Spacer(Modifier.height(2.dp))
                 GoalsSection(state, onClaim = { game.completeGoal(it) })
-                Spacer(Modifier.height(4.dp))
+                Spacer(Modifier.height(2.dp))
             }
         }
     }
 }
 
 @Composable
-private fun StatCards(s: FarmState) {
+private fun StatCards(s: FarmState, cycleProgress: Float) {
     Row(
-        Modifier.fillMaxWidth(),
+        Modifier.fillMaxWidth().height(IntrinsicSize.Min),
         horizontalArrangement = Arrangement.spacedBy(8.dp),
     ) {
         Card(
-            modifier = Modifier.weight(1f),
+            modifier = Modifier.weight(1f).fillMaxHeight(),
             colors = CardDefaults.cardColors(containerColor = MaterialTheme.colorScheme.surface),
             elevation = CardDefaults.cardElevation(defaultElevation = 2.dp),
         ) {
@@ -226,7 +227,7 @@ private fun StatCards(s: FarmState) {
             }
         }
         Card(
-            modifier = Modifier.weight(1f),
+            modifier = Modifier.weight(1f).fillMaxHeight(),
             colors = CardDefaults.cardColors(containerColor = MaterialTheme.colorScheme.surface),
             elevation = CardDefaults.cardElevation(defaultElevation = 2.dp),
         ) {
@@ -247,6 +248,16 @@ private fun StatCards(s: FarmState) {
                     color = MaterialTheme.colorScheme.onSurfaceVariant,
                     modifier = Modifier.padding(top = 4.dp),
                 )
+            }
+        }
+        // Season clock — third card, square, fills the same height as the other two
+        Card(
+            modifier = Modifier.width(72.dp).fillMaxHeight(),
+            colors = CardDefaults.cardColors(containerColor = MaterialTheme.colorScheme.surface),
+            elevation = CardDefaults.cardElevation(defaultElevation = 2.dp),
+        ) {
+            Box(Modifier.fillMaxSize().padding(8.dp)) {
+                SeasonClock(cycleProgress, Modifier.fillMaxSize())
             }
         }
     }
@@ -284,7 +295,7 @@ private fun FeedbackText(msg: String?, bad: Boolean) {
         text = text,
         modifier = Modifier
             .fillMaxWidth()
-            .heightIn(min = 36.dp)
+            .heightIn(min = 22.dp)
             .padding(horizontal = 4.dp),
         textAlign = TextAlign.Center,
         color = if (bad) MaterialTheme.colorScheme.error else MaterialTheme.colorScheme.onBackground,
@@ -297,7 +308,6 @@ private fun FarmGrid(
     s: FarmState,
     nowMs: Long,
     currentSeason: Season,
-    cycleProgress: Float,
     modifier: Modifier = Modifier,
     onPlotClick: (Int) -> Unit,
 ) {
@@ -343,12 +353,6 @@ private fun FarmGrid(
                     }
                 }
             }
-            SeasonClock(
-                cycleProgress = cycleProgress,
-                modifier = Modifier
-                    .size(76.dp)
-                    .align(Alignment.TopCenter),
-            )
         }
     }
 }
@@ -508,11 +512,11 @@ private fun PlotCell(plot: Plot, nowMs: Long, currentSeason: Season, modifier: M
 @Composable
 private fun SeedShelf(state: FarmState, currentSeason: Season, onSelect: (CropType) -> Unit) {
     Column {
-        Text("🌱 Seeds", style = MaterialTheme.typography.titleSmall, fontWeight = FontWeight.Bold)
-        Spacer(Modifier.height(4.dp))
+        Text("🌱 Seeds", style = MaterialTheme.typography.labelMedium, fontWeight = FontWeight.Bold)
+        Spacer(Modifier.height(3.dp))
         Row(
             modifier = Modifier.fillMaxWidth().horizontalScroll(rememberScrollState()),
-            horizontalArrangement = Arrangement.spacedBy(6.dp),
+            horizontalArrangement = Arrangement.spacedBy(5.dp),
         ) {
             for (c in CropType.entries) {
                 SeedButton(
@@ -520,7 +524,7 @@ private fun SeedShelf(state: FarmState, currentSeason: Season, onSelect: (CropTy
                     selected = state.selectedTree == null && c == state.selectedSeed,
                     coins = state.coins,
                     currentSeason = currentSeason,
-                    modifier = Modifier.width(80.dp),
+                    modifier = Modifier.width(62.dp),
                     onClick = { onSelect(c) },
                 )
             }
@@ -531,11 +535,11 @@ private fun SeedShelf(state: FarmState, currentSeason: Season, onSelect: (CropTy
 @Composable
 private fun TreeNursery(state: FarmState, currentSeason: Season, onSelect: (TreeType) -> Unit) {
     Column {
-        Text("🌳 Trees", style = MaterialTheme.typography.titleSmall, fontWeight = FontWeight.Bold)
-        Spacer(Modifier.height(4.dp))
+        Text("🌳 Trees", style = MaterialTheme.typography.labelMedium, fontWeight = FontWeight.Bold)
+        Spacer(Modifier.height(3.dp))
         Row(
             modifier = Modifier.fillMaxWidth().horizontalScroll(rememberScrollState()),
-            horizontalArrangement = Arrangement.spacedBy(6.dp),
+            horizontalArrangement = Arrangement.spacedBy(5.dp),
         ) {
             for (t in TreeType.entries) {
                 TreeButton(
@@ -543,7 +547,7 @@ private fun TreeNursery(state: FarmState, currentSeason: Season, onSelect: (Tree
                     selected = t == state.selectedTree,
                     coins = state.coins,
                     currentSeason = currentSeason,
-                    modifier = Modifier.width(88.dp),
+                    modifier = Modifier.width(70.dp),
                     onClick = { onSelect(t) },
                 )
             }
@@ -572,9 +576,9 @@ private fun TreeButton(tree: TreeType, selected: Boolean, coins: Int, currentSea
             modifier = Modifier
                 .fillMaxWidth()
                 .alpha(contentAlpha)
-                .clip(RoundedCornerShape(10.dp))
+                .clip(RoundedCornerShape(8.dp))
                 .background(bg)
-                .border(if (selected) 3.dp else 2.dp, borderColor, RoundedCornerShape(10.dp))
+                .border(if (selected) 3.dp else 1.dp, borderColor, RoundedCornerShape(8.dp))
                 .pointerInput(Unit) {
                     awaitEachGesture {
                         awaitFirstDown(requireUnconsumed = false)
@@ -590,27 +594,23 @@ private fun TreeButton(tree: TreeType, selected: Boolean, coins: Int, currentSea
                         }
                     }
                 }
-                .padding(vertical = 4.dp, horizontal = 4.dp),
+                .padding(vertical = 3.dp, horizontal = 3.dp),
             horizontalAlignment = Alignment.CenterHorizontally,
         ) {
-            Text("${tree.treeEmoji}${tree.fruitEmoji}", fontSize = 18.sp)
+            Text("${tree.treeEmoji}${tree.fruitEmoji}", fontSize = 14.sp)
             Text(
                 tree.displayName,
-                style = MaterialTheme.typography.labelSmall,
+                fontSize = 9.sp,
                 fontWeight = FontWeight.Bold,
                 textAlign = TextAlign.Center,
+                lineHeight = 11.sp,
             )
             Text(
-                "🪙${prettyCoins(tree.coinCost)}·${tree.maxHarvests}×${prettyCoins(tree.sellPrice)}·${prettyTime(tree.lifeMs)}",
-                fontSize = 9.sp,
-                color = MaterialTheme.colorScheme.onSurfaceVariant,
-                textAlign = TextAlign.Center,
-            )
-            Text(
-                if (inHarvestSeason) "🍂$harvestSeasonStr ✓" else "🍂$harvestSeasonStr",
-                fontSize = 9.sp,
+                "🪙${prettyCoins(tree.coinCost)} ${if (inHarvestSeason) "$harvestSeasonStr✓" else harvestSeasonStr}",
+                fontSize = 8.sp,
                 color = if (inHarvestSeason) Color(0xFF2E7D32) else MaterialTheme.colorScheme.onSurfaceVariant,
                 textAlign = TextAlign.Center,
+                lineHeight = 10.sp,
             )
         }
         if (showTooltip) {
@@ -651,9 +651,9 @@ private fun SeedButton(
             modifier = Modifier
                 .fillMaxWidth()
                 .alpha(contentAlpha)
-                .clip(RoundedCornerShape(10.dp))
+                .clip(RoundedCornerShape(8.dp))
                 .background(bg)
-                .border(if (selected) 3.dp else 2.dp, borderColor, RoundedCornerShape(10.dp))
+                .border(if (selected) 3.dp else 1.dp, borderColor, RoundedCornerShape(8.dp))
                 .pointerInput(Unit) {
                     awaitEachGesture {
                         awaitFirstDown(requireUnconsumed = false)
@@ -669,27 +669,23 @@ private fun SeedButton(
                         }
                     }
                 }
-                .padding(vertical = 2.dp, horizontal = 4.dp),
+                .padding(vertical = 3.dp, horizontal = 3.dp),
             horizontalAlignment = Alignment.CenterHorizontally,
         ) {
-            Text(crop.emoji, fontSize = 18.sp)
+            Text(crop.emoji, fontSize = 15.sp)
             Text(
                 crop.displayName,
-                style = MaterialTheme.typography.labelSmall,
+                fontSize = 9.sp,
                 fontWeight = FontWeight.Bold,
                 textAlign = TextAlign.Center,
+                lineHeight = 11.sp,
             )
             Text(
-                "🪙${prettyCoins(crop.coinCost)}→${prettyCoins(crop.sellPrice)} ⚡${crop.plantEnergy}",
-                fontSize = 9.sp,
-                color = MaterialTheme.colorScheme.onSurfaceVariant,
+                "🪙${prettyCoins(crop.coinCost)} ${if (inSeason) "$plantSeasonStr✓" else "❄︎"}",
+                fontSize = 8.sp,
+                color = if (inSeason) Color(0xFF2E7D32) else MaterialTheme.colorScheme.onSurfaceVariant,
                 textAlign = TextAlign.Center,
-            )
-            Text(
-                if (inSeason) "$plantSeasonStr ✓" else "❄︎$plantSeasonStr",
-                fontSize = 9.sp,
-                color = if (inSeason) Color(0xFF2E7D32) else Color(0xFFBF360C),
-                textAlign = TextAlign.Center,
+                lineHeight = 10.sp,
             )
         }
         if (showTooltip) {
@@ -739,10 +735,10 @@ private fun UpgradesRow(s: FarmState, costFn: (Upgrade) -> Int, onBuy: (Upgrade)
     Column {
         Text(
             "🛠️ Upgrades",
-            style = MaterialTheme.typography.titleMedium,
+            style = MaterialTheme.typography.labelMedium,
             fontWeight = FontWeight.Bold,
         )
-        Spacer(Modifier.height(6.dp))
+        Spacer(Modifier.height(3.dp))
         val affordable = UPGRADES.filter { s.coins >= costFn(it) }
         val unavailable = UPGRADES.filter { s.coins < costFn(it) }
         Row(
@@ -856,14 +852,14 @@ private fun SeasonClock(cycleProgress: Float, modifier: Modifier = Modifier) {
         }
         // Season emojis at each corner quadrant
         Box(modifier = Modifier.fillMaxSize()) {
-            Text(Season.SPRING.emoji, fontSize = 8.sp,
-                modifier = Modifier.align(Alignment.TopEnd).padding(end = 3.dp, top = 3.dp))
-            Text(Season.SUMMER.emoji, fontSize = 8.sp,
-                modifier = Modifier.align(Alignment.BottomEnd).padding(end = 3.dp, bottom = 3.dp))
-            Text(Season.FALL.emoji, fontSize = 8.sp,
-                modifier = Modifier.align(Alignment.BottomStart).padding(start = 3.dp, bottom = 3.dp))
-            Text(Season.WINTER.emoji, fontSize = 8.sp,
-                modifier = Modifier.align(Alignment.TopStart).padding(start = 3.dp, top = 3.dp))
+            Text(Season.SPRING.emoji, fontSize = 13.sp,
+                modifier = Modifier.align(Alignment.TopEnd).padding(end = 2.dp, top = 2.dp))
+            Text(Season.SUMMER.emoji, fontSize = 13.sp,
+                modifier = Modifier.align(Alignment.BottomEnd).padding(end = 2.dp, bottom = 2.dp))
+            Text(Season.FALL.emoji, fontSize = 13.sp,
+                modifier = Modifier.align(Alignment.BottomStart).padding(start = 2.dp, bottom = 2.dp))
+            Text(Season.WINTER.emoji, fontSize = 13.sp,
+                modifier = Modifier.align(Alignment.TopStart).padding(start = 2.dp, top = 2.dp))
         }
     }
 }

@@ -69,8 +69,8 @@ private const val MIN_BIRD_DURATION_MS = 4_000L
 private const val MAX_BIRD_DURATION_MS = 7_000L
 private const val MIN_SPAWN_INTERVAL_MS = 1_400L
 private const val MAX_SPAWN_INTERVAL_MS = 3_000L
-private const val MAX_BIRDS_ON_SCREEN = 3
-private const val LITTER_SPAWN_CHANCE = 0.20f
+private const val MAX_BIRDS_ON_SCREEN = 5
+private const val LITTER_SPAWN_CHANCE = 0.08f
 private const val EXPLOSION_DURATION_MS = 900L
 
 private val SkyTopColor = Color(0xFF8FCFFF)
