@@ -220,8 +220,11 @@ data class Goal(
 val FARM_GOALS = listOf(
     Goal("expand_5x5", "Growing Room", "Expand to a 5×5 farm", 500, 25, 25),
     Goal("expand_6x6", "Real Acreage", "Expand to a 6×6 farm", 2_000, 75, 36),
-    Goal("expand_7x7", "Serious Farm", "Expand to a 7×7 farm", 8_000, 150, 49),
-    Goal("expand_8x8", "Mega Farm", "Expand to an 8×8 farm", 30_000, 300, 64),
+    // IDs kept as expand_7x7 / expand_8x8 so completed-goal flags from
+    // earlier 7×7 / 8×8 saves still match — only the plot count changed
+    // (max farm is now 8×6 = 48 plots).
+    Goal("expand_7x7", "Wider Fields", "Expand to a 7×6 farm", 8_000, 150, 42),
+    Goal("expand_8x8", "Mega Farm", "Expand to an 8×6 farm", 30_000, 300, 48),
 )
 
 const val ENERGY_TILL = 3

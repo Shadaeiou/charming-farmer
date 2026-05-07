@@ -315,16 +315,20 @@ private fun FarmGrid(
         s.plotCount <= 16 -> 4
         s.plotCount <= 25 -> 5
         s.plotCount <= 36 -> 6
-        s.plotCount <= 49 -> 7
+        s.plotCount <= 42 -> 7
         else -> 8
     }
-    val gridRows = s.plotCount / gridCols
+    val gridRows = (s.plotCount + gridCols - 1) / gridCols
 
     BoxWithConstraints(modifier = modifier.fillMaxWidth()) {
-        val gridSize = minOf(maxWidth, maxHeight)
+        val targetAspect = gridCols.toFloat() / gridRows.toFloat()
+        val widthFromHeight = maxHeight * targetAspect
+        val gridW = minOf(maxWidth, widthFromHeight)
+        val gridH = gridW / targetAspect
         Box(
             modifier = Modifier
-                .size(gridSize)
+                .width(gridW)
+                .height(gridH)
                 .align(Alignment.TopCenter)
                 .clip(RoundedCornerShape(16.dp))
                 .background(SoilColor)

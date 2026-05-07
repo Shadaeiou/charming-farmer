@@ -27,6 +27,8 @@ import com.shadaeiou.charmingfarmer.ui.BreweryScreen
 import com.shadaeiou.charmingfarmer.ui.FarmerTheme
 import com.shadaeiou.charmingfarmer.ui.FishingScreen
 import com.shadaeiou.charmingfarmer.ui.HomeScreen
+import com.shadaeiou.charmingfarmer.ui.HouseScreen
+import com.shadaeiou.charmingfarmer.ui.KitchenScreen
 import com.shadaeiou.charmingfarmer.ui.MalthouseScreen
 import com.shadaeiou.charmingfarmer.ui.SettingsScreen
 import com.shadaeiou.charmingfarmer.ui.WorldMapScreen
@@ -208,6 +210,20 @@ private fun Root() {
         composable("brewery") {
             saveLastDest("brewery")
             BreweryScreen(
+                onBack = { nav.popBackStack() },
+                onOpenMap = { nav.navigate("map") },
+            )
+        }
+        composable("house") {
+            saveLastDest("house")
+            HouseScreen(
+                onBack = { nav.popBackStack() },
+                onOpenMap = { nav.navigate("map") },
+            )
+        }
+        composable("kitchen") {
+            saveLastDest("kitchen")
+            KitchenScreen(
                 onBack = { nav.popBackStack() },
                 onOpenMap = { nav.navigate("map") },
             )

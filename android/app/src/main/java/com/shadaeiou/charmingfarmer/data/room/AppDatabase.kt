@@ -148,6 +148,18 @@ data class BrewBatchEntity(
 )
 
 /**
+ * One row per cooking session in flight at the kitchen. Recipe
+ * references [KitchenRecipe] by name; the dish drops into the FARM
+ * silo when the run completes. Schema added in v5.
+ */
+@Entity(tableName = "kitchen_runs")
+data class KitchenRunEntity(
+    @PrimaryKey val id: Long,
+    val recipe: String,
+    @ColumnInfo(name = "start_ms") val startMs: Long,
+)
+
+/**
  * One row per OWNED tile in the world map. Unowned tiles are virtual
  * — they're computed on demand from a deterministic biome function
  * keyed on (x, y), so an infinite map costs zero storage until the
@@ -337,6 +349,21 @@ interface BrewBatchDao {
 }
 
 @Dao
+interface KitchenRunDao {
+    @Query("SELECT * FROM kitchen_runs")
+    fun getAll(): List<KitchenRunEntity>
+
+    @Insert(onConflict = OnConflictStrategy.REPLACE)
+    fun insert(run: KitchenRunEntity)
+
+    @Query("DELETE FROM kitchen_runs WHERE id = :id")
+    fun deleteById(id: Long)
+
+    @Query("DELETE FROM kitchen_runs")
+    fun deleteAll()
+}
+
+@Dao
 interface LandTileDao {
     @Query("SELECT * FROM land_tiles")
     fun getAll(): List<LandTileEntity>
@@ -431,6 +458,28 @@ val MIGRATION_3_4: Migration = object : Migration(3, 4) {
     }
 }
 
+val MIGRATION_4_5: Migration = object : Migration(4, 5) {
+    override fun migrate(db: SupportSQLiteDatabase) {
+        db.execSQL(
+            """
+            CREATE TABLE IF NOT EXISTS kitchen_runs (
+                id INTEGER NOT NULL PRIMARY KEY,
+                recipe TEXT NOT NULL,
+                start_ms INTEGER NOT NULL
+            )
+            """.trimIndent()
+        )
+        // Drop a Kitchen building south of the House for existing
+        // players. INSERT OR IGNORE so we don't trample anything the
+        // player already placed at (0, -1) — unlikely (build flow
+        // isn't shipped yet) but worth being defensive about.
+        db.execSQL(
+            "INSERT OR IGNORE INTO land_tiles (x, y, owned_at_ms, structure) VALUES (?, ?, ?, ?)",
+            arrayOf<Any>(0, -1, System.currentTimeMillis(), "KITCHEN"),
+        )
+    }
+}
+
 // -- Database ---------------------------------------------------------
 
 @Database(
@@ -446,8 +495,9 @@ val MIGRATION_3_4: Migration = object : Migration(3, 4) {
         KilnRunEntity::class,
         BrewBatchEntity::class,
         LandTileEntity::class,
+        KitchenRunEntity::class,
     ],
-    version = 4,
+    version = 5,
     exportSchema = false,
 )
 abstract class AppDatabase : RoomDatabase() {
@@ -462,6 +512,7 @@ abstract class AppDatabase : RoomDatabase() {
     abstract fun kilnRuns(): KilnRunDao
     abstract fun brewBatches(): BrewBatchDao
     abstract fun landTiles(): LandTileDao
+    abstract fun kitchenRuns(): KitchenRunDao
 
     companion object {
         @Volatile private var instance: AppDatabase? = null
@@ -482,7 +533,7 @@ abstract class AppDatabase : RoomDatabase() {
             // a coroutine scope held on the FarmGame, but at our scale
             // this stays well under a frame.
             Room.databaseBuilder(appContext, AppDatabase::class.java, "charming-farmer.db")
-                .addMigrations(MIGRATION_1_2, MIGRATION_2_3, MIGRATION_3_4)
+                .addMigrations(MIGRATION_1_2, MIGRATION_2_3, MIGRATION_3_4, MIGRATION_4_5)
                 .allowMainThreadQueries()
                 .build()
     }

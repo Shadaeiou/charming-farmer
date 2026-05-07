@@ -118,6 +118,18 @@ enum class ItemType(val displayName: String, val emoji: String) {
     BEER_IPA("IPA", "🍺"),
     BEER_STOUT("Dry Stout", "🍺"),
     BEER_HEFEWEIZEN("Hefeweizen", "🍺"),
+
+    // Cooked dishes (artisan goods produced at the kitchen)
+    DISH_CARROT_SOUP("Carrot Soup", "🥣"),
+    DISH_MASHED_POTATOES("Mashed Potatoes", "🥔"),
+    DISH_GARDEN_SALAD("Garden Salad", "🥗"),
+    DISH_STRAWBERRY_JAM("Strawberry Jam", "🍓"),
+    DISH_VEGGIE_STEW("Veggie Stew", "🍲"),
+    DISH_STUFFED_PEPPER("Stuffed Peppers", "🫑"),
+    DISH_PUMPKIN_PIE("Pumpkin Pie", "🥧"),
+    DISH_PINEAPPLE_SALSA("Pineapple Salsa", "🌶️"),
+    DISH_WATERMELON_SORBET("Watermelon Sorbet", "🍧"),
+    DISH_TRUFFLE_RISOTTO("Truffle Risotto", "🍚"),
     ;
 
     companion object {

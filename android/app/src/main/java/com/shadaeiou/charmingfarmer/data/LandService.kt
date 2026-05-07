@@ -30,7 +30,7 @@ enum class StructureType(
     val buildDurationMs: Long,
     val buildEnergy: Int,
 ) {
-    HOUSE("House", "🏡", "home", true, 0, 0L, 0),
+    HOUSE("House", "🏡", "house", true, 0, 0L, 0),
     FARM_FIELD("Farm Field", "🌾", "home", false, 200, 5 * 60_000L, 4),
     TREE_PLOT("Tree Plot", "🌳", "home", false, 400, 10 * 60_000L, 5),
     APIARY("Apiary", "🐝", "apiary", false, 700, 20 * 60_000L, 6),

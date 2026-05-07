@@ -42,7 +42,9 @@ enum class Location(val displayName: String, val emoji: String) {
         MALTHOUSE -> item in MALTING_GRAINS
         BREWERY -> item in BREWERY_INPUTS || item.name.startsWith("HOPS")
             || item.name.startsWith("YEAST_") || item.name.startsWith("MALT_")
-        KITCHEN -> false   // not built yet
+        // Kitchen recipes are coin-priced for now (player buys ingredients
+        // off-screen). Finished dishes deposit straight into the FARM silo.
+        KITCHEN -> false
         MARKET -> true
         CELLAR -> item.name.startsWith("BEER_")
     }

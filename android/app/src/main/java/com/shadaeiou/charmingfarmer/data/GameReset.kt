@@ -43,6 +43,7 @@ object GameReset {
             db.trips().deleteAll()
             db.kilnRuns().deleteAll()
             db.brewBatches().deleteAll()
+            db.kitchenRuns().deleteAll()
             db.landTiles().deleteAll()
 
             // Reset the singleton game_state row to defaults.
@@ -92,6 +93,7 @@ object GameReset {
         TransportService.get(ctx).reload()
         Malthouse.get(ctx).reload()
         Brewery.get(ctx).reload()
+        Kitchen.get(ctx).reload()
         LandService.get(ctx).reload()
         DebugSettings.reload(ctx)
     }
@@ -101,6 +103,7 @@ object GameReset {
         LandTileEntity(1, 0, nowMs, "FARM_FIELD", null, null),
         LandTileEntity(-1, 0, nowMs, "POND", null, null),
         LandTileEntity(0, 1, nowMs, "BIRDWATCHING", null, null),
+        LandTileEntity(0, -1, nowMs, "KITCHEN", null, null),
         LandTileEntity(2, 0, nowMs, "MALTHOUSE", null, null),
         LandTileEntity(3, 0, nowMs, "BREWERY", null, null),
     )

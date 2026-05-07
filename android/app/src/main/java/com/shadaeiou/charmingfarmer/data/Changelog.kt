@@ -8,6 +8,17 @@ data class ReleaseNote(
 
 val CHANGELOG: List<ReleaseNote> = listOf(
     ReleaseNote(
+        version = "0.1.50",
+        date = "2026-05-07",
+        bullets = listOf(
+            "🍳 Kitchen is open! New tile south of the House on the world map, with a pixel-art interior — stove, oven, sink, fridge, tiled walls, checker floor",
+            "Ten cooking recipes from Carrot Soup and Mashed Potatoes to Truffle Risotto and Pumpkin Pie — pay coins for ingredients, dishes land in the storage barn as artisan goods",
+            "🏡 Tapping the House on the map now opens the home interior (cozy living room with sofa, rug, lamp, framed painting, potted plant) — more rooms coming soon",
+            "Farm Field tile still goes to your fields the same as before",
+            "Maximum farm size is now 8 wide × 6 tall (48 plots) — the final two expansion goals are now Wider Fields (7×6) and Mega Farm (8×6)",
+        ),
+    ),
+    ReleaseNote(
         version = "0.1.47",
         date = "2026-05-06",
         bullets = listOf(
