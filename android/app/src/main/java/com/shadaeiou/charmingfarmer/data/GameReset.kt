@@ -107,5 +107,6 @@ object GameReset {
         LandTileEntity(1, -1, nowMs, "BARN", null, null),
         LandTileEntity(2, 0, nowMs, "MALTHOUSE", null, null),
         LandTileEntity(3, 0, nowMs, "BREWERY", null, null),
+        LandTileEntity(-1, -1, nowMs, "MARKET", null, null),
     )
 }

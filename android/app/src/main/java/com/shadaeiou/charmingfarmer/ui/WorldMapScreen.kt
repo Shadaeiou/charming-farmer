@@ -258,18 +258,21 @@ private fun WorldTileView(
             )
         }
 
-        // Building emoji centered. During construction, show the structure
-        // emoji at half opacity with a hammer overlay so the player can
-        // tell what's being built.
+        // Building icon centered. BARN gets a hand-drawn pixel-art icon;
+        // all other structures use the emoji glyph.
         tile?.structure?.let { struct ->
             Box(
                 modifier = Modifier.fillMaxSize(),
                 contentAlignment = Alignment.Center,
             ) {
-                Text(
-                    text = struct.emoji,
-                    fontSize = (size.value * 0.55f).sp,
-                )
+                if (struct == StructureType.BARN) {
+                    BarnMapIcon(modifier = Modifier.fillMaxSize())
+                } else {
+                    Text(
+                        text = struct.emoji,
+                        fontSize = (size.value * 0.55f).sp,
+                    )
+                }
             }
             if (tile.isBuilding) {
                 Text(
@@ -325,6 +328,88 @@ private fun PixelTerrain(biome: Biome, x: Int, y: Int, modifier: Modifier) {
                 )
             }
         }
+    }
+}
+
+/**
+ * Pixel-art top-down icon of a red barn with a grey silo. Drawn on a
+ * 16×16 virtual grid so it looks crisp at every tile size.
+ */
+@Composable
+private fun BarnMapIcon(modifier: Modifier = Modifier) {
+    Canvas(modifier = modifier) {
+        val cols = 16f
+        val rows = 16f
+        val px = size.width / cols
+        val py = size.height / rows
+        fun r(cx: Float, cy: Float, cw: Float, ch: Float, color: Color) {
+            drawRect(color = color, topLeft = Offset(cx * px, cy * py),
+                size = Size(cw * px, ch * py))
+        }
+
+        val barnRed      = Color(0xFFB22222)
+        val barnRedDark  = Color(0xFF8B0000)
+        val roofRed      = Color(0xFF7A1010)
+        val barnWhite    = Color(0xFFF5F0E8)
+        val siloGrey     = Color(0xFF9E9E9E)
+        val siloGreyDark = Color(0xFF757575)
+        val siloDome     = Color(0xFFBDBDBD)
+        val ground       = Color(0xFF5C8A34)
+        val groundShadow = Color(0xFF3E6225)
+        val doorBrown    = Color(0xFF5C3317)
+        val windowYellow = Color(0xFFFFE082)
+
+        // Ground strip at the base
+        r(0f, 13.5f, 16f, 2.5f, ground)
+        r(0f, 14.5f, 16f, 1.5f, groundShadow)
+
+        // ── Silo (right side) ──────────────────────────────────────
+        // Body
+        r(11f, 4f, 3.5f, 10f, siloGrey)
+        r(11f, 4f, 0.6f, 10f, siloGreyDark)   // left shadow stripe
+        r(14f, 4f, 0.5f, 10f, siloGreyDark)   // right shadow stripe
+        // Horizontal band rings
+        r(11f, 7f, 3.5f, 0.4f, siloGreyDark)
+        r(11f, 10f, 3.5f, 0.4f, siloGreyDark)
+        // Dome cap
+        r(11.3f, 2.5f, 2.9f, 1.8f, siloDome)
+        r(11.6f, 1.8f, 2.3f, 0.9f, siloDome)
+        r(12f, 1.2f, 1.5f, 0.8f, siloDome)
+
+        // ── Barn body ──────────────────────────────────────────────
+        r(1f, 6f, 10f, 8f, barnRed)
+        // Right edge shadow
+        r(10f, 6f, 1f, 8f, barnRedDark)
+        // Left edge highlight
+        r(1f, 6f, 0.7f, 8f, Color(0xFFCC2222))
+
+        // ── Roof (triangle simulated with layered rects) ───────────
+        r(0f, 3.5f, 12f, 1f, roofRed)
+        r(0.5f, 2.5f, 11f, 1.2f, roofRed)
+        r(1.2f, 1.5f, 9.5f, 1.2f, roofRed)
+        r(2.2f, 0.5f, 7.5f, 1.2f, roofRed)
+        r(3.5f, -0.2f, 5f, 1f, roofRed)
+        // Ridge cap (peak)
+        r(4.8f, -0.3f, 2.3f, 0.6f, barnRedDark)
+
+        // ── Barn door (double doors, centered) ────────────────────
+        r(3.5f, 9f, 4f, 5f, doorBrown)
+        // Door gap (vertical split)
+        r(5.3f, 9f, 0.3f, 5f, barnRedDark)
+        // Door arch top
+        r(3.5f, 8.3f, 4f, 0.8f, doorBrown)
+        r(4f, 7.9f, 3f, 0.6f, doorBrown)
+        // Horizontal bar across door
+        r(3.5f, 10.5f, 4f, 0.3f, barnRedDark)
+
+        // ── Small loft window above door ──────────────────────────
+        r(4.8f, 6.3f, 2.4f, 1.8f, windowYellow)
+        r(5.8f, 6.3f, 0.3f, 1.8f, barnRedDark)
+        r(4.8f, 7.1f, 2.4f, 0.3f, barnRedDark)
+
+        // White trim strips (fascia)
+        r(1f, 5.8f, 10f, 0.4f, barnWhite)
+        r(1f, 6f, 0.4f, 8f, barnWhite)
     }
 }
 

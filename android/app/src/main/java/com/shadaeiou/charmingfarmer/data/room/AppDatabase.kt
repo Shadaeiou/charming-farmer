@@ -491,6 +491,18 @@ val MIGRATION_5_6: Migration = object : Migration(5, 6) {
     }
 }
 
+val MIGRATION_6_7: Migration = object : Migration(6, 7) {
+    override fun migrate(db: SupportSQLiteDatabase) {
+        // Market building at (-1, -1) — south-west of the House. INSERT
+        // OR IGNORE so we don't trample anything a player already placed
+        // there (build flow isn't fully shipped yet, but be defensive).
+        db.execSQL(
+            "INSERT OR IGNORE INTO land_tiles (x, y, owned_at_ms, structure) VALUES (?, ?, ?, ?)",
+            arrayOf<Any>(-1, -1, System.currentTimeMillis(), "MARKET"),
+        )
+    }
+}
+
 // -- Database ---------------------------------------------------------
 
 @Database(
@@ -508,7 +520,7 @@ val MIGRATION_5_6: Migration = object : Migration(5, 6) {
         LandTileEntity::class,
         KitchenRunEntity::class,
     ],
-    version = 6,
+    version = 7,
     exportSchema = false,
 )
 abstract class AppDatabase : RoomDatabase() {
@@ -544,7 +556,7 @@ abstract class AppDatabase : RoomDatabase() {
             // a coroutine scope held on the FarmGame, but at our scale
             // this stays well under a frame.
             Room.databaseBuilder(appContext, AppDatabase::class.java, "charming-farmer.db")
-                .addMigrations(MIGRATION_1_2, MIGRATION_2_3, MIGRATION_3_4, MIGRATION_4_5, MIGRATION_5_6)
+                .addMigrations(MIGRATION_1_2, MIGRATION_2_3, MIGRATION_3_4, MIGRATION_4_5, MIGRATION_5_6, MIGRATION_6_7)
                 .allowMainThreadQueries()
                 .build()
     }

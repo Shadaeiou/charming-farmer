@@ -8,6 +8,16 @@ data class ReleaseNote(
 
 val CHANGELOG: List<ReleaseNote> = listOf(
     ReleaseNote(
+        version = "0.1.52",
+        date = "2026-05-07",
+        bullets = listOf(
+            "🏪 Market is open! New tile south-west of the House on the world map — ship goods here from the Barn and sell them for coins with one tap",
+            "Sell individual item types or cash out everything at once with the Sell Everything button",
+            "Prices scale quadratically with quality: a Grade S dish earns dramatically more than a Grade C one",
+            "Barn icon on the world map redesigned: hand-drawn pixel-art red barn with a grey silo, visible at a glance",
+        ),
+    ),
+    ReleaseNote(
         version = "0.1.51",
         date = "2026-05-07",
         bullets = listOf(

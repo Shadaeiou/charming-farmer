@@ -31,6 +31,7 @@ import com.shadaeiou.charmingfarmer.ui.HomeScreen
 import com.shadaeiou.charmingfarmer.ui.HouseScreen
 import com.shadaeiou.charmingfarmer.ui.KitchenScreen
 import com.shadaeiou.charmingfarmer.ui.MalthouseScreen
+import com.shadaeiou.charmingfarmer.ui.MarketScreen
 import com.shadaeiou.charmingfarmer.ui.SettingsScreen
 import com.shadaeiou.charmingfarmer.ui.WorldMapScreen
 import kotlinx.coroutines.CoroutineScope
@@ -232,6 +233,13 @@ private fun Root() {
         composable("barn") {
             saveLastDest("barn")
             BarnScreen(
+                onBack = { nav.popBackStack() },
+                onOpenMap = { nav.navigate("map") },
+            )
+        }
+        composable("market") {
+            saveLastDest("market")
+            MarketScreen(
                 onBack = { nav.popBackStack() },
                 onOpenMap = { nav.navigate("map") },
             )
