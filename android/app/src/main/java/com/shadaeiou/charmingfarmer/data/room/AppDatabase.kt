@@ -202,6 +202,9 @@ interface UpgradeLevelDao {
 
     @Insert(onConflict = OnConflictStrategy.REPLACE)
     fun upsertAll(entities: List<UpgradeLevelEntity>)
+
+    @Query("DELETE FROM upgrade_levels")
+    fun deleteAll()
 }
 
 @Dao
@@ -217,6 +220,9 @@ interface BirdSeenDao {
 
     @Insert(onConflict = OnConflictStrategy.REPLACE)
     fun upsertAll(entities: List<BirdSeenEntity>)
+
+    @Query("DELETE FROM birds_seen")
+    fun deleteAll()
 }
 
 @Dao
@@ -261,6 +267,9 @@ interface VehicleDao {
 
     @Insert(onConflict = OnConflictStrategy.REPLACE)
     fun insertAll(entities: List<VehicleOwnedEntity>)
+
+    @Query("DELETE FROM vehicles_owned")
+    fun deleteAll()
 }
 
 @Dao
@@ -287,6 +296,14 @@ interface SystemMetaDao {
     fun put(entity: SystemMetaEntity)
 
     fun put(key: String, value: String) = put(SystemMetaEntity(key, value))
+
+    /**
+     * Wipe every meta key except [keepKeys]. Used by full-game reset to
+     * preserve the legacy-migration marker without restoring every other
+     * service's defaults by hand.
+     */
+    @Query("DELETE FROM system_meta WHERE key NOT IN (:keepKeys)")
+    fun deleteAllExcept(keepKeys: List<String>)
 }
 
 @Dao
@@ -335,6 +352,9 @@ interface LandTileDao {
 
     @Query("DELETE FROM land_tiles WHERE x = :x AND y = :y")
     fun deleteAt(x: Int, y: Int)
+
+    @Query("DELETE FROM land_tiles")
+    fun deleteAll()
 }
 
 // -- Migrations -------------------------------------------------------

@@ -538,37 +538,12 @@ class FarmGame(context: Context) {
     }
 
     fun reset() {
-        // Wipe everything Room knows about the farm state (plots,
-        // upgrades, birds), but leave inventories alone — those live
-        // in TransportService and should survive a "fresh start" of
-        // the farm itself.
-        db.runInTransaction {
-            db.gameState().upsert(GameStateEntity(
-                energy = STARTING_ENERGY.toFloat(),
-                maxEnergy = STARTING_ENERGY,
-                regenMs = 3000L,
-                lastTickMs = System.currentTimeMillis(),
-                coins = STARTING_COINS,
-                harvested = 0,
-                selectedSeed = CropType.CARROT.name,
-                selectedTree = null,
-            ))
-            db.plots().deleteAll()
-            db.plots().upsertAll(List(STARTING_PLOT_COUNT) {
-                PlotEntity(
-                    position = it,
-                    kind = PlotKind.GRASS.name,
-                    crop = null,
-                    tree = null,
-                    plantedAtMs = 0L,
-                    watered = false,
-                    bonusMs = 0L,
-                    harvestCount = 0,
-                )
-            })
-            db.systemMeta().put("plot_count", STARTING_PLOT_COUNT.toString())
-            db.systemMeta().put("completed_goals", "")
-        }
+        // Full-game reset: wipes every gameplay table (farm, silos,
+        // brewery, malthouse, world map, vehicles, birds), reseeds the
+        // starter layout, and reloads every singleton service. The
+        // legacy-migration marker in system_meta is preserved so
+        // LegacyMigrator doesn't re-import old SharedPreferences blobs.
+        GameReset.resetEverything(appContext)
         state = load()
         note("Fresh start!")
     }

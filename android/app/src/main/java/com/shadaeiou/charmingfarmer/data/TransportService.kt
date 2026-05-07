@@ -219,6 +219,23 @@ class TransportService private constructor(appContext: Context) {
         bump()
     }
 
+    /**
+     * Drop in-memory state and re-read from the (presumably freshly
+     * wiped or re-seeded) DB. Used by full-game reset.
+     */
+    fun reload() {
+        _inventories.clear()
+        _vehiclesOwned.clear()
+        activeTrips.clear()
+        nextTripId = 1L
+        load()
+        if (VehicleType.WHEELBARROW !in _vehiclesOwned) {
+            _vehiclesOwned += VehicleType.WHEELBARROW
+            db.vehicles().insert(VehicleOwnedEntity(VehicleType.WHEELBARROW.name))
+        }
+        bump()
+    }
+
     fun unlockVehicle(vehicle: VehicleType): Boolean {
         if (vehicle in _vehiclesOwned) return false
         _vehiclesOwned += vehicle

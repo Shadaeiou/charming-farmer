@@ -60,7 +60,11 @@ sealed class UpdateUiState {
 
 @OptIn(ExperimentalMaterial3Api::class)
 @Composable
-fun SettingsScreen(onBack: () -> Unit, onOpenMap: () -> Unit) {
+fun SettingsScreen(
+    onBack: () -> Unit,
+    onOpenMap: () -> Unit,
+    onResetComplete: () -> Unit,
+) {
     val context = LocalContext.current
     val scope = rememberCoroutineScope()
     val updater = remember { Updater(context.applicationContext) }
@@ -197,7 +201,7 @@ fun SettingsScreen(onBack: () -> Unit, onOpenMap: () -> Unit) {
             HorizontalDivider()
             Spacer(Modifier.height(16.dp))
 
-            DebugSection()
+            DebugSection(onResetComplete = onResetComplete)
 
             Spacer(Modifier.height(16.dp))
             HorizontalDivider()
@@ -209,7 +213,7 @@ fun SettingsScreen(onBack: () -> Unit, onOpenMap: () -> Unit) {
 }
 
 @Composable
-private fun DebugSection() {
+private fun DebugSection(onResetComplete: () -> Unit) {
     val ctx = LocalContext.current
     // Make sure DebugSettings has loaded its persisted values before
     // we render the toggles.
@@ -256,18 +260,26 @@ private fun DebugSection() {
     OutlinedButton(
         onClick = { resetConfirm = true },
         modifier = Modifier.fillMaxWidth(),
-    ) { Text("Reset farm (plots + upgrades)") }
+    ) { Text("Reset game (full wipe)") }
 
     if (resetConfirm) {
         AlertDialog(
             onDismissRequest = { resetConfirm = false },
-            title = { Text("Reset the farm?") },
-            text = { Text("Clears all plots, upgrades, energy, and coins back to a fresh start. Silos, malthouse, and bird sightings stay intact.") },
+            title = { Text("Reset the entire game?") },
+            text = {
+                Text(
+                    "Wipes everything: farm, silos, world map, malthouse, brewery, " +
+                        "vehicles, bird sightings, upgrades, coins, energy. The starter " +
+                        "layout (House + Farm + Pond + Bird Hide + Malthouse + Brewery) " +
+                        "comes back fresh. This cannot be undone."
+                )
+            },
             confirmButton = {
                 TextButton(onClick = {
                     game.reset()
                     resetConfirm = false
-                }) { Text("Reset") }
+                    onResetComplete()
+                }) { Text("Reset everything") }
             },
             dismissButton = {
                 TextButton(onClick = { resetConfirm = false }) { Text("Cancel") }

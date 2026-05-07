@@ -390,6 +390,17 @@ class Brewery private constructor(appContext: Context) {
         return flaws
     }
 
+    /** Drop in-memory state and re-read from DB. Used by full-game reset. */
+    fun reload() {
+        activeBatches.clear()
+        tier = BreweryTier.STOVETOP
+        nextBatchId = 1L
+        feedback = null
+        feedbackBad = false
+        load()
+        bump()
+    }
+
     fun upgrade(to: BreweryTier): Boolean {
         if (to.ordinal <= tier.ordinal) return false
         tier = to

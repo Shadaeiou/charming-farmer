@@ -62,4 +62,15 @@ object DebugSettings {
         infiniteEnergy = value
         db?.systemMeta()?.put(KEY_INFINITE_ENERGY, value.toString())
     }
+
+    /** Re-read both flags from DB after a full-game reset. */
+    fun reload(context: Context) {
+        if (!initialized) {
+            init(context)
+            return
+        }
+        val database = db ?: AppDatabase.get(context.applicationContext)
+        skipTimers = database.systemMeta().get(KEY_SKIP_TIMERS) == "true"
+        infiniteEnergy = database.systemMeta().get(KEY_INFINITE_ENERGY) == "true"
+    }
 }

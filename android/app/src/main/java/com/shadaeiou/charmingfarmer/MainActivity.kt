@@ -160,6 +160,18 @@ private fun Root() {
             SettingsScreen(
                 onBack = { nav.popBackStack() },
                 onOpenMap = { nav.navigate("map") },
+                onResetComplete = {
+                    // After a full-game reset, blow away the back stack
+                    // so any stale per-screen FarmGame instances on
+                    // earlier screens get recreated against the
+                    // freshly-wiped DB. The world map is the new home
+                    // base, so land there.
+                    saveLastDest("map")
+                    nav.navigate("map") {
+                        popUpTo(nav.graph.startDestinationId) { inclusive = true }
+                        launchSingleTop = true
+                    }
+                },
             )
         }
         composable("map") {

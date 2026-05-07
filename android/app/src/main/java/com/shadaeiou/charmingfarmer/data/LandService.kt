@@ -232,6 +232,13 @@ class LandService private constructor(appContext: Context) {
         bump()
     }
 
+    /** Drop in-memory state and re-read from DB. Used by full-game reset. */
+    fun reload() {
+        _ownedTiles.clear()
+        load()
+        bump()
+    }
+
     private fun bump() { revisionTick = revisionTick + 1 }
 
     private fun load() {

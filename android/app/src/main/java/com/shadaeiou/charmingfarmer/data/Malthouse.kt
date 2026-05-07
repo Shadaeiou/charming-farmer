@@ -159,6 +159,15 @@ class Malthouse private constructor(appContext: Context) {
         bump()
     }
 
+    /** Drop in-memory state and re-read from DB. Used by full-game reset. */
+    fun reload() {
+        activeRuns.clear()
+        tier = MalthouseTier.BASIC
+        nextRunId = 1L
+        load()
+        bump()
+    }
+
     fun upgrade(to: MalthouseTier): Boolean {
         if (to.ordinal <= tier.ordinal) return false
         tier = to

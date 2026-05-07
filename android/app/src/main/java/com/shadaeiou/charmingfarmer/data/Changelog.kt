@@ -8,6 +8,15 @@ data class ReleaseNote(
 
 val CHANGELOG: List<ReleaseNote> = listOf(
     ReleaseNote(
+        version = "0.1.47",
+        date = "2026-05-06",
+        bullets = listOf(
+            "🔄 Reset game button is now a true fresh start — wipes the world map, all silos, the malthouse, the brewery cellar, vehicles, bird sightings, upgrades, coins, and energy",
+            "After resetting, you land back on a fresh world map with the starter House + Farm + Pond + Bird Hide + Malthouse + Brewery cluster — exactly what a new install sees",
+            "Confirmation dialog spells out everything that gets wiped so the button can't be a surprise",
+        ),
+    ),
+    ReleaseNote(
         version = "0.1.44",
         date = "2026-05-06",
         bullets = listOf(
