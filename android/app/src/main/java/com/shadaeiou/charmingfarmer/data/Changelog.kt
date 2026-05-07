@@ -8,6 +8,16 @@ data class ReleaseNote(
 
 val CHANGELOG: List<ReleaseNote> = listOf(
     ReleaseNote(
+        version = "0.1.51",
+        date = "2026-05-07",
+        bullets = listOf(
+            "🏚️ Storage Barn is now a real building on the world map (south-east of the Farm). Tap it to see everything in your silo — cooked dishes, malts, beer, raw grain, hops — grouped by category with average grade and best tier per stack",
+            "Existing players get a barn auto-placed at (1, -1) on next launch; fresh installs see it pre-built alongside the kitchen",
+            "Barn interior is pixel art: plank walls, hay loft, hanging lantern, stacked sacks of grain, wooden crates, hay bales, a leaning pitchfork",
+            "Shipping panel from the barn lets you ship straight from storage to the malthouse, brewery, or market",
+        ),
+    ),
+    ReleaseNote(
         version = "0.1.50",
         date = "2026-05-07",
         bullets = listOf(

@@ -480,6 +480,17 @@ val MIGRATION_4_5: Migration = object : Migration(4, 5) {
     }
 }
 
+val MIGRATION_5_6: Migration = object : Migration(5, 6) {
+    override fun migrate(db: SupportSQLiteDatabase) {
+        // Storage Barn for the FARM silo. INSERT OR IGNORE so we don't
+        // overwrite anything the player put at (1, -1) themselves.
+        db.execSQL(
+            "INSERT OR IGNORE INTO land_tiles (x, y, owned_at_ms, structure) VALUES (?, ?, ?, ?)",
+            arrayOf<Any>(1, -1, System.currentTimeMillis(), "BARN"),
+        )
+    }
+}
+
 // -- Database ---------------------------------------------------------
 
 @Database(
@@ -497,7 +508,7 @@ val MIGRATION_4_5: Migration = object : Migration(4, 5) {
         LandTileEntity::class,
         KitchenRunEntity::class,
     ],
-    version = 5,
+    version = 6,
     exportSchema = false,
 )
 abstract class AppDatabase : RoomDatabase() {
@@ -533,7 +544,7 @@ abstract class AppDatabase : RoomDatabase() {
             // a coroutine scope held on the FarmGame, but at our scale
             // this stays well under a frame.
             Room.databaseBuilder(appContext, AppDatabase::class.java, "charming-farmer.db")
-                .addMigrations(MIGRATION_1_2, MIGRATION_2_3, MIGRATION_3_4, MIGRATION_4_5)
+                .addMigrations(MIGRATION_1_2, MIGRATION_2_3, MIGRATION_3_4, MIGRATION_4_5, MIGRATION_5_6)
                 .allowMainThreadQueries()
                 .build()
     }

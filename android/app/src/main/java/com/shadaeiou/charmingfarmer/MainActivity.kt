@@ -22,6 +22,7 @@ import androidx.navigation.compose.composable
 import androidx.navigation.compose.rememberNavController
 import com.shadaeiou.charmingfarmer.data.DownloadResult
 import com.shadaeiou.charmingfarmer.data.Updater
+import com.shadaeiou.charmingfarmer.ui.BarnScreen
 import com.shadaeiou.charmingfarmer.ui.BirdwatchingScreen
 import com.shadaeiou.charmingfarmer.ui.BreweryScreen
 import com.shadaeiou.charmingfarmer.ui.FarmerTheme
@@ -224,6 +225,13 @@ private fun Root() {
         composable("kitchen") {
             saveLastDest("kitchen")
             KitchenScreen(
+                onBack = { nav.popBackStack() },
+                onOpenMap = { nav.navigate("map") },
+            )
+        }
+        composable("barn") {
+            saveLastDest("barn")
+            BarnScreen(
                 onBack = { nav.popBackStack() },
                 onOpenMap = { nav.navigate("map") },
             )
