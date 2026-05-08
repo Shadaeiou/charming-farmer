@@ -49,6 +49,7 @@ import com.shadaeiou.charmingfarmer.data.NotificationSettings
 import com.shadaeiou.charmingfarmer.data.ReleaseNote
 import com.shadaeiou.charmingfarmer.data.UpdateInfo
 import com.shadaeiou.charmingfarmer.data.Updater
+import com.shadaeiou.charmingfarmer.service.LocalNotifier
 import kotlinx.coroutines.launch
 
 sealed class UpdateUiState {
@@ -275,6 +276,25 @@ private fun NotificationsSection() {
         description = "Alert when one of your vehicles delivers its cargo.",
         checked = NotificationSettings.tripDone,
         onChange = { NotificationSettings.updateTripDone(it) },
+    )
+
+    Spacer(Modifier.height(12.dp))
+    Button(
+        onClick = {
+            LocalNotifier.showNow(
+                context = ctx.applicationContext,
+                channel = NotificationSettings.Channel.CROPS_READY,
+                title = "🌱 Test notification",
+                body = "If you see this, push notifications are wired up correctly.",
+            )
+        },
+        modifier = Modifier.fillMaxWidth(),
+    ) { Text("Send test notification now") }
+    Spacer(Modifier.height(4.dp))
+    Text(
+        "Bypasses the toggles and quiet-while-playing setting so you can verify Android permissions and the channel are healthy.",
+        style = MaterialTheme.typography.labelSmall,
+        color = MaterialTheme.colorScheme.onSurfaceVariant,
     )
 }
 

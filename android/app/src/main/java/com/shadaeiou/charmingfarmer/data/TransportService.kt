@@ -11,6 +11,7 @@ import com.shadaeiou.charmingfarmer.data.room.LegacyMigrator
 import com.shadaeiou.charmingfarmer.data.room.SystemMetaKeys
 import com.shadaeiou.charmingfarmer.data.room.TransportTripEntity
 import com.shadaeiou.charmingfarmer.data.room.VehicleOwnedEntity
+import com.shadaeiou.charmingfarmer.service.LocalNotifier
 import org.json.JSONArray
 import org.json.JSONObject
 
@@ -123,7 +124,7 @@ data class Trip(
  *     vehicle until the trip arrives)
  *   - nextTripId counter (system_meta)
  */
-class TransportService private constructor(appContext: Context) {
+class TransportService private constructor(private val appContext: Context) {
 
     private val db = AppDatabase.get(appContext).also {
         LegacyMigrator.migrateIfNeeded(appContext, it)
@@ -231,6 +232,16 @@ class TransportService private constructor(appContext: Context) {
         }
         _inventories[from] = inventory
         activeTrips += trip
+        if (!DebugSettings.skipTimers) {
+            LocalNotifier.schedule(
+                context = appContext,
+                channel = NotificationSettings.Channel.TRIP_DONE,
+                delayMs = trip.durationMs,
+                title = "${owned.type.emoji} ${owned.displayName} arrived",
+                body = "Cargo delivered to ${to.displayName}.",
+                uniqueTag = "trip_${trip.id}",
+            )
+        }
         bump()
         return trip
     }

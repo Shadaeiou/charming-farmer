@@ -10,6 +10,7 @@ import com.shadaeiou.charmingfarmer.data.room.GameStateEntity
 import com.shadaeiou.charmingfarmer.data.room.LegacyMigrator
 import com.shadaeiou.charmingfarmer.data.room.PlotEntity
 import com.shadaeiou.charmingfarmer.data.room.UpgradeLevelEntity
+import com.shadaeiou.charmingfarmer.service.LocalNotifier
 import kotlin.math.pow
 import kotlin.random.Random
 
@@ -321,6 +322,9 @@ class FarmGame(context: Context) {
             energy = s.energy - ENERGY_TILL,
             plots = s.plots.replaceAt(idx, Plot(kind = PlotKind.TILLED)),
         )
+        // Tilling clears whatever was on this plot — kill any pending
+        // ready-notification for it so the player doesn't get a phantom.
+        LocalNotifier.cancel(appContext, plotNotifTag(idx))
         note("Tilled the soil.")
         save()
     }
@@ -350,6 +354,21 @@ class FarmGame(context: Context) {
                 bonusMs = speedBonus,
             )),
         )
+        // Schedule the "ready to harvest" notification. Watering may
+        // shorten this further at runtime — the worker fires on the
+        // original schedule and the notification is harmless if the
+        // player already harvested early.
+        if (!DebugSettings.skipTimers) {
+            val delayMs = (crop.growthMs - speedBonus).coerceAtLeast(0L)
+            LocalNotifier.schedule(
+                context = appContext,
+                channel = NotificationSettings.Channel.CROPS_READY,
+                delayMs = delayMs,
+                title = "${crop.emoji} ${crop.displayName} is ready",
+                body = "Tap to head back to the farm and harvest.",
+                uniqueTag = plotNotifTag(idx),
+            )
+        }
         note("Planted ${crop.displayName.lowercase()}!")
         save()
     }
@@ -359,6 +378,7 @@ class FarmGame(context: Context) {
         val currentSeason = currentSeason(now)
         if (p.isCropDead(currentSeason)) {
             state = s.copy(plots = s.plots.replaceAt(idx, Plot(kind = PlotKind.TILLED)))
+            LocalNotifier.cancel(appContext, plotNotifTag(idx))
             note("Cleared the dead ${crop.displayName.lowercase()} 💀")
             save()
             return
@@ -386,6 +406,9 @@ class FarmGame(context: Context) {
                     harvested = s.harvested + 1,
                     plots = s.plots.replaceAt(idx, Plot()),
                 )
+                // Just harvested — kill any pending ready-notification
+                // for this slot.
+                LocalNotifier.cancel(appContext, plotNotifTag(idx))
                 val grade = ItemGrade.fromScore(score).display
                 val tierTag = if (tier != ItemTier.NORMAL) " ${tier.emojiSuffix}" else ""
                 val msg = when {
@@ -441,8 +464,43 @@ class FarmGame(context: Context) {
                 plantedAtMs = now,
             )),
         )
+        // Tree's first fruit window opens after harvestIntervalMs.
+        // Subsequent windows get rescheduled in handleTreeTap when the
+        // player picks an existing fruit.
+        if (!DebugSettings.skipTimers) {
+            LocalNotifier.schedule(
+                context = appContext,
+                channel = NotificationSettings.Channel.CROPS_READY,
+                delayMs = tree.harvestIntervalMs,
+                title = "${tree.fruitEmoji} ${tree.displayName} fruit ripe",
+                body = "Tap to harvest before the window closes.",
+                uniqueTag = plotNotifTag(idx),
+            )
+        }
         note("Planted ${tree.displayName.lowercase()}!")
         save()
+    }
+
+    /** Stable per-plot notification tag — replanting on the same plot
+     *  REPLACEs the existing scheduled notification, never duplicates. */
+    private fun plotNotifTag(idx: Int): String = "plot_$idx"
+
+    private fun rescheduleTreeNotification(idx: Int, p: Plot, now: Long) {
+        val tree = p.tree ?: return
+        if (DebugSettings.skipTimers) return
+        if (p.harvestCount >= tree.maxHarvests) {
+            LocalNotifier.cancel(appContext, plotNotifTag(idx))
+            return
+        }
+        val delay = (p.treeNextHarvestMs() - now).coerceAtLeast(0L)
+        LocalNotifier.schedule(
+            context = appContext,
+            channel = NotificationSettings.Channel.CROPS_READY,
+            delayMs = delay,
+            title = "${tree.fruitEmoji} ${tree.displayName} fruit ripe",
+            body = "Tap to harvest before the window closes.",
+            uniqueTag = plotNotifTag(idx),
+        )
     }
 
     private fun handleTreeTap(s: FarmState, idx: Int, p: Plot, now: Long) {
@@ -452,6 +510,7 @@ class FarmGame(context: Context) {
         when {
             p.treeIsDead(now) -> {
                 state = s.copy(plots = s.plots.replaceAt(idx, Plot()))
+                LocalNotifier.cancel(appContext, plotNotifTag(idx))
                 note("Removed the dead ${tree.displayName.lowercase()}.")
                 save()
             }
@@ -464,6 +523,7 @@ class FarmGame(context: Context) {
             p.treeHarvestReady(now) -> {
                 if (s.energy < ENERGY_HARVEST) { fail("Need ⚡$ENERGY_HARVEST"); return }
                 val windowsDue = p.treeWindowsDue(now)
+                val newPlot = p.copy(harvestCount = windowsDue)
                 val item = tree.inventoryItem
                 if (item != null) {
                     val score = harvestScore(false)
@@ -478,8 +538,9 @@ class FarmGame(context: Context) {
                     state = s.copy(
                         energy = s.energy - ENERGY_HARVEST,
                         harvested = s.harvested + 1,
-                        plots = s.plots.replaceAt(idx, p.copy(harvestCount = windowsDue)),
+                        plots = s.plots.replaceAt(idx, newPlot),
                     )
+                    rescheduleTreeNotification(idx, newPlot, now)
                     val grade = ItemGrade.fromScore(score).display
                     val tierTag = if (tier != ItemTier.NORMAL) " ${tier.emojiSuffix}" else ""
                     note("Harvested ${tree.displayName.lowercase()} → silo (Grade $grade$tierTag, $score)")
@@ -492,8 +553,9 @@ class FarmGame(context: Context) {
                     energy = s.energy - ENERGY_HARVEST,
                     coins = s.coins + earned,
                     harvested = s.harvested + 1,
-                    plots = s.plots.replaceAt(idx, p.copy(harvestCount = windowsDue)),
+                    plots = s.plots.replaceAt(idx, newPlot),
                 )
+                rescheduleTreeNotification(idx, newPlot, now)
                 note("Harvested ${tree.displayName.lowercase()}! +🪙$earned")
                 save()
             }

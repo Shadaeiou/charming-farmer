@@ -8,6 +8,17 @@ data class ReleaseNote(
 
 val CHANGELOG: List<ReleaseNote> = listOf(
     ReleaseNote(
+        version = "0.1.56",
+        date = "2026-05-08",
+        bullets = listOf(
+            "🔔 Local push notifications actually fire now! Plant a crop, start a kiln, dispatch a trip — when it's done you get a notification on your phone, even if the app is closed",
+            "Backed by WorkManager so notifications survive reboots and battery saver. Each scheduled event has its own slot — replanting a plot replaces the old notification instead of duplicating it",
+            "Settings → Notifications has a new \"Send test notification now\" button so you can confirm Android permissions and channel routing are working before waiting hours for a real event",
+            "Quiet-while-playing toggle (on by default) suppresses notifications when the app is in the foreground, so you don't get a buzz for something you can already see",
+            "🌳 Trees in growth show a yellow progress bar; the moment a fruit is ripe, the bar AND the plot outline turn bright green so a ready tree can't be missed",
+        ),
+    ),
+    ReleaseNote(
         version = "0.1.55",
         date = "2026-05-08",
         bullets = listOf(

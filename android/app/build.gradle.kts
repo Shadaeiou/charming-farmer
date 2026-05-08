@@ -131,6 +131,10 @@ dependencies {
     implementation("androidx.room:room-ktx:2.6.1")
     ksp("androidx.room:room-compiler:2.6.1")
 
+    // WorkManager: schedules local notifications that fire even when
+    // the app is closed (crop ready, kiln finished, trip arrived).
+    implementation("androidx.work:work-runtime-ktx:2.9.1")
+
     implementation(platform("com.google.firebase:firebase-bom:33.7.0"))
     implementation("com.google.firebase:firebase-messaging-ktx")
 

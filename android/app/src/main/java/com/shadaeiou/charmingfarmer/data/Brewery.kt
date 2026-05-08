@@ -8,6 +8,7 @@ import androidx.compose.runtime.setValue
 import com.shadaeiou.charmingfarmer.data.room.AppDatabase
 import com.shadaeiou.charmingfarmer.data.room.BrewBatchEntity
 import com.shadaeiou.charmingfarmer.data.room.LegacyMigrator
+import com.shadaeiou.charmingfarmer.service.LocalNotifier
 import org.json.JSONObject
 import kotlin.random.Random
 
@@ -160,7 +161,7 @@ enum class BreweryTier(
 private const val META_BREWERY_TIER = "brewery_tier"
 private const val META_NEXT_BATCH_ID = "brewery_next_batch_id"
 
-class Brewery private constructor(appContext: Context) {
+class Brewery private constructor(private val appContext: Context) {
 
     private val db = AppDatabase.get(appContext).also {
         LegacyMigrator.migrateIfNeeded(appContext, it)
@@ -251,6 +252,17 @@ class Brewery private constructor(appContext: Context) {
             db.systemMeta().put(META_NEXT_BATCH_ID, nextBatchId.toString())
         }
         activeBatches += batch
+        if (!DebugSettings.skipTimers) {
+            val totalMs = recipe.mashMs + recipe.boilMs + recipe.fermentMs
+            LocalNotifier.schedule(
+                context = appContext,
+                channel = NotificationSettings.Channel.CRAFT_DONE,
+                delayMs = totalMs,
+                title = "🍺 ${recipe.displayName} bottled",
+                body = "Tap to head to the brewery and check the BJCP score.",
+                uniqueTag = "brew_${batch.id}",
+            )
+        }
         note("Started ${recipe.displayName} — mashing now")
         bump()
         return batch

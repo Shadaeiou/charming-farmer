@@ -8,6 +8,7 @@ import androidx.compose.runtime.setValue
 import com.shadaeiou.charmingfarmer.data.room.AppDatabase
 import com.shadaeiou.charmingfarmer.data.room.KitchenRunEntity
 import com.shadaeiou.charmingfarmer.data.room.LegacyMigrator
+import com.shadaeiou.charmingfarmer.service.LocalNotifier
 import kotlin.random.Random
 
 /**
@@ -205,7 +206,7 @@ enum class KitchenTier(
 private const val META_KITCHEN_TIER = "kitchen_tier"
 private const val META_NEXT_COOK_ID = "kitchen_next_cook_id"
 
-class Kitchen private constructor(appContext: Context) {
+class Kitchen private constructor(private val appContext: Context) {
 
     private val db = AppDatabase.get(appContext).also {
         LegacyMigrator.migrateIfNeeded(appContext, it)
@@ -263,6 +264,16 @@ class Kitchen private constructor(appContext: Context) {
             db.systemMeta().put(META_NEXT_COOK_ID, nextRunId.toString())
         }
         activeRuns += run
+        if (!DebugSettings.skipTimers) {
+            LocalNotifier.schedule(
+                context = appContext,
+                channel = NotificationSettings.Channel.CRAFT_DONE,
+                delayMs = recipe.cookDurationMs,
+                title = "${recipe.outputType.emoji} ${recipe.displayName} ready",
+                body = "Tap to head to the kitchen and plate it.",
+                uniqueTag = "cook_${run.id}",
+            )
+        }
         note("Started cooking ${recipe.displayName}")
         bump()
         return run

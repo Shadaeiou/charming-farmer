@@ -13,6 +13,7 @@ class FarmerApp : Application() {
     override fun onCreate() {
         super.onCreate()
         createUpdatesNotificationChannel()
+        createGameEventsChannel()
         initFirebaseIfConfigured()
     }
 
@@ -23,6 +24,17 @@ class FarmerApp : Application() {
             NotificationManager.IMPORTANCE_DEFAULT,
         ).apply {
             description = "Notifications about new app versions available to install."
+        }
+        getSystemService<NotificationManager>()?.createNotificationChannel(channel)
+    }
+
+    private fun createGameEventsChannel() {
+        val channel = NotificationChannel(
+            CHANNEL_GAME_EVENTS,
+            "Farm events",
+            NotificationManager.IMPORTANCE_DEFAULT,
+        ).apply {
+            description = "Crops ready, crafting finished, transport arrived."
         }
         getSystemService<NotificationManager>()?.createNotificationChannel(channel)
     }
@@ -50,6 +62,7 @@ class FarmerApp : Application() {
 
     companion object {
         const val CHANNEL_UPDATES = "app_updates"
+        const val CHANNEL_GAME_EVENTS = "game_events"
         const val UPDATE_TOPIC = "app-updates"
         private const val TAG = "FarmerApp"
     }

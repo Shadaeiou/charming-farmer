@@ -370,6 +370,9 @@ private fun PlotCell(plot: Plot, nowMs: Long, currentSeason: Season, modifier: M
     val (bg, borderColor) = when {
         treeDead -> Color(0xFF4A3020) to Color(0xFF2A180A)
         cropDead -> Color(0xFF2A1A0A) to Color(0xFF140D05)
+        // Tree harvest ready → bright green outline so the plot pops
+        // visually even on a busy farm grid.
+        treeReady -> Color(0xFF5B3E1F) to Color(0xFF4CAF50)
         plot.kind == PlotKind.TREE -> Color(0xFF5B3E1F) to SoilDarkColor
         plot.kind == PlotKind.GRASS -> GrassColor to GrassEdgeColor
         else -> SoilTilledColor to SoilDarkColor
@@ -432,13 +435,13 @@ private fun PlotCell(plot: Plot, nowMs: Long, currentSeason: Season, modifier: M
                     if (!allHarvestsDone) {
                         val harvestFrac = plot.treeHarvestIntervalFraction(nowMs)
                         val animHarvestFrac by animateFloatAsState(harvestFrac, tween(300), label = "harvest")
+                        // Yellow while the tree is still growing toward
+                        // the next harvest; bright green the moment a
+                        // fruit is ready to pick.
                         val barColor = when {
                             treeWrongSeason -> Color(0xFF9E9E9E)
-                            else -> Color(
-                                red = (0x7D + (0xFF - 0x7D) * harvestFrac) / 255f,
-                                green = (0xB8 + (0xD2 - 0xB8) * harvestFrac) / 255f,
-                                blue = (0x7D + (0x4A - 0x7D) * harvestFrac) / 255f,
-                            )
+                            treeReady -> Color(0xFF4CAF50)
+                            else -> Color(0xFFFFC107)
                         }
                         Box(
                             Modifier
@@ -451,7 +454,7 @@ private fun PlotCell(plot: Plot, nowMs: Long, currentSeason: Season, modifier: M
                         ) {
                             Box(
                                 Modifier
-                                    .fillMaxWidth(animHarvestFrac)
+                                    .fillMaxWidth(if (treeReady) 1f else animHarvestFrac)
                                     .fillMaxHeight()
                                     .clip(RoundedCornerShape(2.dp))
                                     .background(barColor),

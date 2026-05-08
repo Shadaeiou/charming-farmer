@@ -8,6 +8,7 @@ import androidx.compose.runtime.setValue
 import com.shadaeiou.charmingfarmer.data.room.AppDatabase
 import com.shadaeiou.charmingfarmer.data.room.KilnRunEntity
 import com.shadaeiou.charmingfarmer.data.room.LegacyMigrator
+import com.shadaeiou.charmingfarmer.service.LocalNotifier
 import kotlin.random.Random
 
 /**
@@ -76,7 +77,7 @@ enum class MalthouseTier(
 private const val META_TIER = "malthouse_tier"
 private const val META_NEXT_RUN_ID = "malthouse_next_run_id"
 
-class Malthouse private constructor(appContext: Context) {
+class Malthouse private constructor(private val appContext: Context) {
 
     private val db = AppDatabase.get(appContext).also {
         LegacyMigrator.migrateIfNeeded(appContext, it)
@@ -126,6 +127,16 @@ class Malthouse private constructor(appContext: Context) {
             db.systemMeta().put(META_NEXT_RUN_ID, nextRunId.toString())
         }
         activeRuns += run
+        if (!DebugSettings.skipTimers) {
+            LocalNotifier.schedule(
+                context = appContext,
+                channel = NotificationSettings.Channel.CRAFT_DONE,
+                delayMs = profile.durationMs,
+                title = "🏭 ${profile.outputType.displayName} ready",
+                body = "Tap to head to the malthouse and pull the kiln.",
+                uniqueTag = "kiln_${run.id}",
+            )
+        }
         bump()
         return run
     }

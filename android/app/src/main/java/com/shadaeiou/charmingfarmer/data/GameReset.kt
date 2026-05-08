@@ -8,6 +8,7 @@ import com.shadaeiou.charmingfarmer.data.room.LegacyMigrator
 import com.shadaeiou.charmingfarmer.data.room.PlotEntity
 import com.shadaeiou.charmingfarmer.data.room.SystemMetaKeys
 import com.shadaeiou.charmingfarmer.data.room.VehicleOwnedEntity
+import com.shadaeiou.charmingfarmer.service.LocalNotifier
 
 /**
  * Wipes every gameplay table back to a fresh-install state and
@@ -93,6 +94,10 @@ object GameReset {
             // service adds its own meta keys.
             db.systemMeta().deleteAllExcept(listOf(SystemMetaKeys.MIGRATED_FROM_PREFS))
         }
+
+        // Wipe every pending local notification too — there's nothing
+        // left to be ready or arrive once we've reset.
+        LocalNotifier.cancelAll(ctx)
 
         // Reload every singleton from the freshly-wiped DB so the UI
         // shows the new state immediately.
