@@ -158,12 +158,15 @@ fun KitchenScreen(onBack: () -> Unit, onOpenMap: () -> Unit) {
 
                 KitchenSection("📜 Recipes") {
                     KitchenRecipe.entries.forEach { recipe ->
-                        val canCook = kitchen.availableSlots() > 0 &&
-                            state.coins >= recipe.ingredientCoinCost &&
-                            state.energy.toInt() >= recipe.cookEnergy
+                        val needCoins = state.coins < recipe.ingredientCoinCost
+                        val needEnergy = state.energy.toInt() < recipe.cookEnergy
+                        val noSlots = kitchen.availableSlots() == 0
+                        val canCook = !needCoins && !needEnergy && !noSlots
                         RecipeRow(
                             recipe = recipe,
                             enabled = canCook,
+                            shortCoins = needCoins,
+                            shortEnergy = needEnergy,
                             onCook = {
                                 kitchen.startCooking(
                                     recipe = recipe,
@@ -233,13 +236,23 @@ private fun CookingRow(run: CookingRun, nowMs: Long) {
 }
 
 @Composable
-private fun RecipeRow(recipe: KitchenRecipe, enabled: Boolean, onCook: () -> Unit) {
+private fun RecipeRow(
+    recipe: KitchenRecipe,
+    enabled: Boolean,
+    shortCoins: Boolean,
+    shortEnergy: Boolean,
+    onCook: () -> Unit,
+) {
     val bg = if (enabled) MaterialTheme.colorScheme.primaryContainer
         else MaterialTheme.colorScheme.surfaceVariant.copy(alpha = 0.4f)
     val borderColor = if (enabled) MaterialTheme.colorScheme.primary
         else MaterialTheme.colorScheme.outline.copy(alpha = 0.4f)
     val labelColor = if (enabled) MaterialTheme.colorScheme.onPrimaryContainer
         else MaterialTheme.colorScheme.onSurfaceVariant
+    val errorColor = MaterialTheme.colorScheme.error
+    val energyColor = if (shortEnergy) errorColor else labelColor
+    val coinColor = if (shortCoins) errorColor else labelColor
+    val ingredientColor = if (shortCoins) errorColor else labelColor
     Column(
         modifier = Modifier
             .fillMaxWidth()
@@ -259,11 +272,25 @@ private fun RecipeRow(recipe: KitchenRecipe, enabled: Boolean, onCook: () -> Uni
                 color = labelColor,
                 modifier = Modifier.weight(1f),
             )
-            Text(
-                "⚡${recipe.cookEnergy} · 🪙${prettyCoins(recipe.ingredientCoinCost)}",
-                style = MaterialTheme.typography.labelSmall,
-                color = labelColor,
-            )
+            Row {
+                Text(
+                    "⚡${recipe.cookEnergy}",
+                    style = MaterialTheme.typography.labelSmall,
+                    color = energyColor,
+                    fontWeight = if (shortEnergy) FontWeight.Bold else FontWeight.Normal,
+                )
+                Text(
+                    " · ",
+                    style = MaterialTheme.typography.labelSmall,
+                    color = labelColor,
+                )
+                Text(
+                    "🪙${prettyCoins(recipe.ingredientCoinCost)}",
+                    style = MaterialTheme.typography.labelSmall,
+                    color = coinColor,
+                    fontWeight = if (shortCoins) FontWeight.Bold else FontWeight.Normal,
+                )
+            }
         }
         Spacer(Modifier.height(4.dp))
         Text(
@@ -276,7 +303,7 @@ private fun RecipeRow(recipe: KitchenRecipe, enabled: Boolean, onCook: () -> Uni
             "Ingredients: " + recipe.ingredients.joinToString { "${it.quantity}× ${it.crop.emoji} ${it.crop.displayName}" },
             style = MaterialTheme.typography.labelSmall,
             fontWeight = FontWeight.Bold,
-            color = labelColor,
+            color = ingredientColor,
         )
         Text(
             "Cooks in ${prettyMinutes(recipe.cookDurationMs)} → barn (artisan good)",

@@ -41,6 +41,7 @@ enum class StructureType(
     MALTHOUSE("Malthouse", "🏭", "malthouse", true, 800, 20 * 60_000L, 6),
     BREWERY("Brewery", "🍺", "brewery", true, 1500, 45 * 60_000L, 8),
     KITCHEN("Kitchen", "🍳", "kitchen", true, 1200, 30 * 60_000L, 7),
+    GARAGE("Garage", "🚗", "garage", true, 1500, 30 * 60_000L, 7),
     CELLAR("Cellar", "🍷", "cellar", true, 2000, 60 * 60_000L, 9),
     MARKET("Market", "🏪", "market", true, 1800, 45 * 60_000L, 8),
     MINE("Mine", "⛏️", "mine", true, 2500, 90 * 60_000L, 10),

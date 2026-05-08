@@ -258,17 +258,18 @@ private fun WorldTileView(
             )
         }
 
-        // Building icon centered. BARN gets a hand-drawn pixel-art icon;
-        // all other structures use the emoji glyph.
+        // Building icon centered. BARN and MARKET get hand-drawn pixel-art
+        // icons sized to match the emoji glyphs used by every other tile;
+        // anything else falls back to the structure's emoji at 0.55× size.
         tile?.structure?.let { struct ->
             Box(
                 modifier = Modifier.fillMaxSize(),
                 contentAlignment = Alignment.Center,
             ) {
-                if (struct == StructureType.BARN) {
-                    BarnMapIcon(modifier = Modifier.fillMaxSize())
-                } else {
-                    Text(
+                when (struct) {
+                    StructureType.BARN -> BarnMapIcon(modifier = Modifier.size(size * 0.6f))
+                    StructureType.MARKET -> MarketMapIcon(modifier = Modifier.size(size * 0.6f))
+                    else -> Text(
                         text = struct.emoji,
                         fontSize = (size.value * 0.55f).sp,
                     )
@@ -333,10 +334,11 @@ private fun PixelTerrain(biome: Biome, x: Int, y: Int, modifier: Modifier) {
 
 /**
  * Pixel-art top-down icon of a red barn with a grey silo. Drawn on a
- * 16×16 virtual grid so it looks crisp at every tile size.
+ * 16×16 virtual grid so it looks crisp at every tile size. Internal so
+ * the barn screen can reuse it as a header glyph.
  */
 @Composable
-private fun BarnMapIcon(modifier: Modifier = Modifier) {
+internal fun BarnMapIcon(modifier: Modifier = Modifier) {
     Canvas(modifier = modifier) {
         val cols = 16f
         val rows = 16f
@@ -410,6 +412,90 @@ private fun BarnMapIcon(modifier: Modifier = Modifier) {
         // White trim strips (fascia)
         r(1f, 5.8f, 10f, 0.4f, barnWhite)
         r(1f, 6f, 0.4f, 8f, barnWhite)
+    }
+}
+
+/**
+ * Pixel-art top-down icon of a market stall — red-and-white striped
+ * awning over a wooden counter with produce on display. Matches the
+ * pattern used in [MarketScreen]'s background art so the icon and the
+ * destination feel like the same place.
+ */
+@Composable
+internal fun MarketMapIcon(modifier: Modifier = Modifier) {
+    Canvas(modifier = modifier) {
+        val cols = 16f
+        val rows = 16f
+        val px = size.width / cols
+        val py = size.height / rows
+        fun r(cx: Float, cy: Float, cw: Float, ch: Float, color: Color) {
+            drawRect(color = color, topLeft = Offset(cx * px, cy * py),
+                size = Size(cw * px, ch * py))
+        }
+
+        val awningRed   = Color(0xFFC62828)
+        val awningWhite = Color(0xFFF5F5F5)
+        val awningDark  = Color(0xFF8B1A1A)
+        val woodPost    = Color(0xFF795548)
+        val woodPostDark= Color(0xFF4E342E)
+        val counterWood = Color(0xFF8D6E63)
+        val counterDark = Color(0xFF5D4037)
+        val ground      = Color(0xFF5C8A34)
+        val groundShade = Color(0xFF3E6225)
+        val produceRed  = Color(0xFFE53935)
+        val produceGold = Color(0xFFFFB300)
+        val produceGrn  = Color(0xFF43A047)
+
+        // Ground strip
+        r(0f, 14f, 16f, 2f, ground)
+        r(0f, 15f, 16f, 1f, groundShade)
+
+        // ── Wooden support posts ─────────────────────────────────────
+        r(1.5f, 4f, 1.2f, 10f, woodPost)
+        r(1.5f, 4f, 0.4f, 10f, woodPostDark)
+        r(13.3f, 4f, 1.2f, 10f, woodPost)
+        r(13.3f, 4f, 0.4f, 10f, woodPostDark)
+
+        // ── Striped awning ────────────────────────────────────────────
+        // Base red layer
+        r(1f, 2f, 14f, 3.5f, awningRed)
+        // White stripes (3 of them)
+        r(3f, 2f, 2.5f, 3.5f, awningWhite)
+        r(7f, 2f, 2.5f, 3.5f, awningWhite)
+        r(11f, 2f, 2.5f, 3.5f, awningWhite)
+        // Awning peak (curve simulated with stepped rects)
+        r(2f, 1.2f, 12f, 0.9f, awningRed)
+        r(4f, 0.5f, 8f, 0.9f, awningRed)
+        r(6f, 0f, 4f, 0.7f, awningDark)
+        // Bottom scalloped fringe (alternating rects)
+        for (i in 0 until 7) {
+            val fx = 1f + i * 2f
+            val fc = if (i % 2 == 0) awningRed else awningWhite
+            r(fx, 5.5f, 1.8f, 1f, fc)
+        }
+        r(1f, 6.3f, 14f, 0.5f, awningDark)
+
+        // ── Counter ───────────────────────────────────────────────────
+        r(2f, 9.5f, 12f, 4f, counterWood)
+        r(2f, 9.5f, 12f, 0.5f, counterDark)
+        r(2f, 13.2f, 12f, 0.6f, counterDark)
+        // Counter face vertical seams
+        for (s in 1 until 4) {
+            r(2f + s * 3f, 9.5f, 0.3f, 4f, counterDark)
+        }
+
+        // ── Produce on counter ────────────────────────────────────────
+        // Red apples
+        r(3f, 8f, 1.4f, 1.4f, produceRed)
+        r(4.6f, 8f, 1.4f, 1.4f, produceRed)
+        r(3.4f, 7.5f, 0.4f, 0.6f, woodPostDark)
+        r(5f, 7.5f, 0.4f, 0.6f, woodPostDark)
+        // Golden grain mounds
+        r(7f, 8f, 1.4f, 1.4f, produceGold)
+        r(8.6f, 8f, 1.4f, 1.4f, produceGold)
+        // Green cabbages
+        r(10.4f, 8f, 1.4f, 1.4f, produceGrn)
+        r(12f, 8f, 1.4f, 1.4f, produceGrn)
     }
 }
 

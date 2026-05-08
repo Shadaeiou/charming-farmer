@@ -63,37 +63,37 @@ enum class CropType(
     /** Seasons in which this crop can be planted. */
     val plantSeasons: Set<Season> = Season.entries.toSet(),
 ) {
-    CARROT("Carrot", "🥕", "🌱", 3, 20_000L, 8, 2, plantSeasons = setOf(Season.SPRING, Season.FALL)),
-    POTATO("Potato", "🥔", "🌱", 5, 25_000L, 13, 2, plantSeasons = setOf(Season.SPRING, Season.FALL)),
-    LETTUCE("Lettuce", "🥬", "🌱", 8, 35_000L, 21, 2, plantSeasons = setOf(Season.SPRING, Season.FALL)),
-    ONION("Onion", "🧅", "🌱", 12, 50_000L, 32, 2, plantSeasons = setOf(Season.SPRING, Season.FALL)),
+    CARROT("Carrot", "🥕", "🌱", 3, 20_000L, 8, 2, ItemType.CROP_CARROT, setOf(Season.SPRING, Season.FALL)),
+    POTATO("Potato", "🥔", "🌱", 5, 25_000L, 13, 2, ItemType.CROP_POTATO, setOf(Season.SPRING, Season.FALL)),
+    LETTUCE("Lettuce", "🥬", "🌱", 8, 35_000L, 21, 2, ItemType.CROP_LETTUCE, setOf(Season.SPRING, Season.FALL)),
+    ONION("Onion", "🧅", "🌱", 12, 50_000L, 32, 2, ItemType.CROP_ONION, setOf(Season.SPRING, Season.FALL)),
     BARLEY("Barley", "🌾", "🌱", 6, 30_000L, 0, 2, ItemType.BARLEY, setOf(Season.SPRING, Season.FALL)),
     WHEATGRAIN("Wheat (grain)", "🌾", "🌱", 10, 45_000L, 0, 2, ItemType.WHEAT_GRAIN, setOf(Season.SPRING, Season.FALL)),
     OATS_CROP("Oats", "🌾", "🌱", 14, 60_000L, 0, 2, ItemType.OATS, setOf(Season.SPRING, Season.FALL)),
     RYE_CROP("Rye", "🌾", "🌱", 18, 75_000L, 0, 2, ItemType.RYE, setOf(Season.FALL, Season.WINTER)),
-    WHEAT("Wheat", "🌾", "🌱", 17, 65_000L, 45, 3, plantSeasons = setOf(Season.SPRING, Season.FALL)),
-    CORN("Corn", "🌽", "🌱", 25, 90_000L, 67, 3, plantSeasons = setOf(Season.SUMMER)),
-    BEAN("Bean", "🫘", "🌱", 36, 120_000L, 96, 3, plantSeasons = setOf(Season.SPRING, Season.SUMMER)),
-    STRAWBERRY("Strawberry", "🍓", "🌱", 52, 160_000L, 139, 3, plantSeasons = setOf(Season.SPRING, Season.SUMMER)),
-    MUSHROOM("Mushroom", "🍄", "🌱", 75, 210_000L, 200, 4, plantSeasons = setOf(Season.FALL, Season.WINTER, Season.SPRING)),
-    BROCCOLI("Broccoli", "🥦", "🌱", 108, 300_000L, 288, 4, plantSeasons = setOf(Season.SPRING, Season.FALL)),
-    ZUCCHINI("Zucchini", "🥒", "🌱", 155, 420_000L, 413, 4, plantSeasons = setOf(Season.SUMMER)),
-    TOMATO("Tomato", "🍅", "🌿", 225, 540_000L, 600, 4, plantSeasons = setOf(Season.SUMMER)),
-    BLUEBERRY("Blueberry", "🫐", "🌱", 325, 720_000L, 867, 5, plantSeasons = setOf(Season.SPRING, Season.SUMMER)),
-    GRAPE("Grape", "🍇", "🌱", 468, 960_000L, 1_248, 5, plantSeasons = setOf(Season.SUMMER, Season.FALL)),
-    PUMPKIN("Pumpkin", "🎃", "🌿", 675, 1_320_000L, 1_800, 5, plantSeasons = setOf(Season.SUMMER, Season.FALL)),
-    PEPPER("Pepper", "🫑", "🌿", 972, 1_800_000L, 2_592, 6, plantSeasons = setOf(Season.SUMMER)),
-    PINEAPPLE("Pineapple", "🍍", "🌿", 1_400, 2_400_000L, 3_733, 6, plantSeasons = setOf(Season.SUMMER, Season.FALL)),
-    WATERMELON("Watermelon", "🍉", "🌿", 2_000, 3_240_000L, 5_333, 7, plantSeasons = setOf(Season.SUMMER)),
-    GARLIC("Garlic", "🧄", "🌱", 2_900, 4_500_000L, 7_733, 7, plantSeasons = setOf(Season.FALL, Season.WINTER, Season.SPRING)),
-    KIWI("Kiwi", "🥝", "🌱", 4_200, 6_000_000L, 11_200, 7, plantSeasons = setOf(Season.FALL)),
-    PEANUT("Peanut", "🥜", "🌱", 6_000, 8_100_000L, 16_000, 8, plantSeasons = setOf(Season.SUMMER, Season.FALL)),
-    HOT_PEPPER("Hot Pepper", "🌶️", "🌿", 8_650, 10_800_000L, 23_067, 8, plantSeasons = setOf(Season.SUMMER)),
-    SNAP_PEA("Snap Pea", "🫛", "🌱", 12_500, 14_400_000L, 33_333, 9, plantSeasons = setOf(Season.SPRING, Season.FALL)),
-    SAFFRON("Saffron", "🌸", "🌱", 18_000, 18_000_000L, 48_000, 9, plantSeasons = setOf(Season.FALL)),
-    VANILLA("Vanilla", "🌺", "🌿", 26_000, 21_600_000L, 69_333, 10, plantSeasons = setOf(Season.SUMMER, Season.FALL)),
-    PURPLE_YAM("Purple Yam", "🍠", "🌱", 37_500, 25_200_000L, 100_000, 10, plantSeasons = setOf(Season.SUMMER, Season.FALL)),
-    TRUFFLE("Truffle", "🌰", "🌱", 54_000, 28_800_000L, 144_000, 10, plantSeasons = setOf(Season.FALL, Season.WINTER)),
+    WHEAT("Wheat", "🌾", "🌱", 17, 65_000L, 45, 3, ItemType.CROP_WHEAT, setOf(Season.SPRING, Season.FALL)),
+    CORN("Corn", "🌽", "🌱", 25, 90_000L, 67, 3, ItemType.CROP_CORN, setOf(Season.SUMMER)),
+    BEAN("Bean", "🫘", "🌱", 36, 120_000L, 96, 3, ItemType.CROP_BEAN, setOf(Season.SPRING, Season.SUMMER)),
+    STRAWBERRY("Strawberry", "🍓", "🌱", 52, 160_000L, 139, 3, ItemType.CROP_STRAWBERRY, setOf(Season.SPRING, Season.SUMMER)),
+    MUSHROOM("Mushroom", "🍄", "🌱", 75, 210_000L, 200, 4, ItemType.CROP_MUSHROOM, setOf(Season.FALL, Season.WINTER, Season.SPRING)),
+    BROCCOLI("Broccoli", "🥦", "🌱", 108, 300_000L, 288, 4, ItemType.CROP_BROCCOLI, setOf(Season.SPRING, Season.FALL)),
+    ZUCCHINI("Zucchini", "🥒", "🌱", 155, 420_000L, 413, 4, ItemType.CROP_ZUCCHINI, setOf(Season.SUMMER)),
+    TOMATO("Tomato", "🍅", "🌿", 225, 540_000L, 600, 4, ItemType.CROP_TOMATO, setOf(Season.SUMMER)),
+    BLUEBERRY("Blueberry", "🫐", "🌱", 325, 720_000L, 867, 5, ItemType.CROP_BLUEBERRY, setOf(Season.SPRING, Season.SUMMER)),
+    GRAPE("Grape", "🍇", "🌱", 468, 960_000L, 1_248, 5, ItemType.CROP_GRAPE, setOf(Season.SUMMER, Season.FALL)),
+    PUMPKIN("Pumpkin", "🎃", "🌿", 675, 1_320_000L, 1_800, 5, ItemType.CROP_PUMPKIN, setOf(Season.SUMMER, Season.FALL)),
+    PEPPER("Pepper", "🫑", "🌿", 972, 1_800_000L, 2_592, 6, ItemType.CROP_PEPPER, setOf(Season.SUMMER)),
+    PINEAPPLE("Pineapple", "🍍", "🌿", 1_400, 2_400_000L, 3_733, 6, ItemType.CROP_PINEAPPLE, setOf(Season.SUMMER, Season.FALL)),
+    WATERMELON("Watermelon", "🍉", "🌿", 2_000, 3_240_000L, 5_333, 7, ItemType.CROP_WATERMELON, setOf(Season.SUMMER)),
+    GARLIC("Garlic", "🧄", "🌱", 2_900, 4_500_000L, 7_733, 7, ItemType.CROP_GARLIC, setOf(Season.FALL, Season.WINTER, Season.SPRING)),
+    KIWI("Kiwi", "🥝", "🌱", 4_200, 6_000_000L, 11_200, 7, ItemType.CROP_KIWI, setOf(Season.FALL)),
+    PEANUT("Peanut", "🥜", "🌱", 6_000, 8_100_000L, 16_000, 8, ItemType.CROP_PEANUT, setOf(Season.SUMMER, Season.FALL)),
+    HOT_PEPPER("Hot Pepper", "🌶️", "🌿", 8_650, 10_800_000L, 23_067, 8, ItemType.CROP_HOT_PEPPER, setOf(Season.SUMMER)),
+    SNAP_PEA("Snap Pea", "🫛", "🌱", 12_500, 14_400_000L, 33_333, 9, ItemType.CROP_SNAP_PEA, setOf(Season.SPRING, Season.FALL)),
+    SAFFRON("Saffron", "🌸", "🌱", 18_000, 18_000_000L, 48_000, 9, ItemType.CROP_SAFFRON, setOf(Season.FALL)),
+    VANILLA("Vanilla", "🌺", "🌿", 26_000, 21_600_000L, 69_333, 10, ItemType.CROP_VANILLA, setOf(Season.SUMMER, Season.FALL)),
+    PURPLE_YAM("Purple Yam", "🍠", "🌱", 37_500, 25_200_000L, 100_000, 10, ItemType.CROP_PURPLE_YAM, setOf(Season.SUMMER, Season.FALL)),
+    TRUFFLE("Truffle", "🌰", "🌱", 54_000, 28_800_000L, 144_000, 10, ItemType.CROP_TRUFFLE, setOf(Season.FALL, Season.WINTER)),
 }
 
 enum class TreeType(
@@ -367,11 +367,9 @@ class FarmGame(context: Context) {
             p.isReady(now) -> {
                 if (s.energy < ENERGY_HARVEST) { fail("Need ⚡$ENERGY_HARVEST"); return }
                 val item = crop.inventoryItem
+                val score = harvestScore(p.watered)
+                val tier = ItemTier.roll()
                 if (item != null) {
-                    // Grain / hops / other raw ingredients route to the silo
-                    // with a quality roll instead of selling for coins.
-                    val score = harvestScore(p.watered)
-                    val tier = ItemTier.roll()
                     transport.addToInventory(Location.FARM, ItemStack(
                         type = item,
                         quantity = 1,
@@ -379,26 +377,26 @@ class FarmGame(context: Context) {
                         tier = tier,
                         createdMs = now,
                     ))
-                    state = s.copy(
-                        energy = s.energy - ENERGY_HARVEST,
-                        harvested = s.harvested + 1,
-                        plots = s.plots.replaceAt(idx, Plot()),
-                    )
-                    val grade = ItemGrade.fromScore(score).display
-                    val tierTag = if (tier != ItemTier.NORMAL) " ${tier.emojiSuffix}" else ""
-                    note("Harvested ${crop.displayName.lowercase()} → silo (Grade $grade$tierTag, $score)")
-                    save()
-                    return
                 }
                 val sellBonusLvl = s.upgradeLevels["sellBonus"] ?: 0
-                val earned = crop.sellPrice + sellBonusLvl * 2
+                val earned = if (crop.sellPrice > 0) crop.sellPrice + sellBonusLvl * 2 else 0
                 state = s.copy(
                     energy = s.energy - ENERGY_HARVEST,
                     coins = s.coins + earned,
                     harvested = s.harvested + 1,
                     plots = s.plots.replaceAt(idx, Plot()),
                 )
-                note("Harvested ${crop.displayName.lowercase()}! +🪙$earned")
+                val grade = ItemGrade.fromScore(score).display
+                val tierTag = if (tier != ItemTier.NORMAL) " ${tier.emojiSuffix}" else ""
+                val msg = when {
+                    item != null && earned > 0 ->
+                        "Harvested ${crop.displayName.lowercase()}! +🪙$earned, +1 to silo (Grade $grade$tierTag)"
+                    item != null ->
+                        "Harvested ${crop.displayName.lowercase()} → silo (Grade $grade$tierTag, $score)"
+                    else ->
+                        "Harvested ${crop.displayName.lowercase()}! +🪙$earned"
+                }
+                note(msg)
                 save()
             }
             !p.watered -> {

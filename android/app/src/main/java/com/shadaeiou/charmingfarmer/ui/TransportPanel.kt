@@ -23,6 +23,7 @@ import androidx.compose.material3.Card
 import androidx.compose.material3.CardDefaults
 import androidx.compose.material3.LinearProgressIndicator
 import androidx.compose.material3.MaterialTheme
+import androidx.compose.material3.OutlinedButton
 import androidx.compose.material3.Text
 import androidx.compose.material3.TextButton
 import androidx.compose.runtime.Composable
@@ -126,6 +127,11 @@ fun TransportPanel(
                         val totalQty = stacks.sumOf { it.quantity }
                         val avgScore = stacks.sumOf { it.score.toLong() * it.quantity } /
                             totalQty.coerceAtLeast(1)
+                        var qty by remember(type) { mutableStateOf(1) }
+                        // Cap qty by available stock and the largest owned vehicle.
+                        val maxVehicleCap = transport.vehiclesOwned().maxOfOrNull { it.capacityKg } ?: 1
+                        val maxAllowed = totalQty.coerceAtMost(maxVehicleCap).coerceAtLeast(1)
+                        if (qty > maxAllowed) qty = maxAllowed
                         Column(
                             modifier = Modifier
                                 .fillMaxWidth()
@@ -151,6 +157,41 @@ fun TransportPanel(
                                 )
                             }
                             Spacer(Modifier.height(6.dp))
+                            // Quantity stepper: -, count badge, +, max.
+                            Row(
+                                verticalAlignment = Alignment.CenterVertically,
+                                horizontalArrangement = Arrangement.spacedBy(6.dp),
+                            ) {
+                                Text(
+                                    "Qty:",
+                                    style = MaterialTheme.typography.labelMedium,
+                                    color = MaterialTheme.colorScheme.onSurfaceVariant,
+                                )
+                                OutlinedButton(
+                                    onClick = { qty = (qty - 1).coerceAtLeast(1) },
+                                    enabled = qty > 1,
+                                    contentPadding = PaddingValues(horizontal = 10.dp, vertical = 4.dp),
+                                ) { Text("−") }
+                                Text(
+                                    "$qty",
+                                    style = MaterialTheme.typography.bodyMedium,
+                                    fontWeight = FontWeight.Bold,
+                                    modifier = Modifier
+                                        .clip(RoundedCornerShape(6.dp))
+                                        .background(MaterialTheme.colorScheme.surface)
+                                        .padding(horizontal = 12.dp, vertical = 6.dp),
+                                )
+                                OutlinedButton(
+                                    onClick = { qty = (qty + 1).coerceAtMost(maxAllowed) },
+                                    enabled = qty < maxAllowed,
+                                    contentPadding = PaddingValues(horizontal = 10.dp, vertical = 4.dp),
+                                ) { Text("+") }
+                                TextButton(
+                                    onClick = { qty = maxAllowed },
+                                    enabled = qty < maxAllowed,
+                                ) { Text("Max ($maxAllowed)") }
+                            }
+                            Spacer(Modifier.height(6.dp))
                             // Filter destinations to only those that accept this
                             // item — no shipping hops to the malthouse.
                             val acceptedDestinations = allowedDestinations.filter { it.accepts(type) }
@@ -165,9 +206,9 @@ fun TransportPanel(
                                     acceptedDestinations.forEach { dest ->
                                         Button(
                                             onClick = {
-                                                val veh = pickVehicle(transport, 1, nowMs)
+                                                val veh = pickVehicle(transport, qty, nowMs)
                                                 if (veh == null) {
-                                                    feedback = "All vehicles in transit"
+                                                    feedback = "No idle vehicle big enough for $qty"
                                                     feedbackBad = true
                                                     return@Button
                                                 }
@@ -175,7 +216,7 @@ fun TransportPanel(
                                                     from = origin,
                                                     to = dest,
                                                     type = type,
-                                                    amount = 1,
+                                                    amount = qty,
                                                     vehicle = veh,
                                                     nowMs = System.currentTimeMillis(),
                                                 )
@@ -183,7 +224,7 @@ fun TransportPanel(
                                                     feedback = "Couldn't ship that"
                                                     feedbackBad = true
                                                 } else {
-                                                    feedback = "Sent 1 ${type.displayName} → ${dest.displayName}"
+                                                    feedback = "Sent $qty ${type.displayName} → ${dest.displayName} (${veh.emoji})"
                                                     feedbackBad = false
                                                 }
                                             },
@@ -194,7 +235,7 @@ fun TransportPanel(
                                             ),
                                         ) {
                                             Text(
-                                                "→ ${dest.emoji}  ${dest.displayName}",
+                                                "Send $qty → ${dest.emoji}  ${dest.displayName}",
                                                 style = MaterialTheme.typography.bodyMedium,
                                                 fontWeight = FontWeight.Bold,
                                             )

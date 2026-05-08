@@ -48,6 +48,7 @@ import androidx.compose.ui.text.font.FontWeight
 import androidx.compose.ui.text.style.TextAlign
 import androidx.compose.ui.unit.dp
 import androidx.compose.ui.unit.sp
+import com.shadaeiou.charmingfarmer.data.CropType
 import com.shadaeiou.charmingfarmer.data.FarmGame
 import com.shadaeiou.charmingfarmer.data.Inventory
 import com.shadaeiou.charmingfarmer.data.ItemGrade
@@ -268,8 +269,17 @@ private fun MarketItemCard(
  * reference prices that put them in the right relative ballpark.
  */
 private fun basePriceFor(type: ItemType): Int {
-    // Dishes
+    // Dishes (artisan goods from the kitchen)
     KitchenRecipe.values().firstOrNull { it.outputType == type }?.let { return it.basePrice }
+    // Raw farm crops shipped from the silo. The CROP_X ItemType name
+    // maps directly to CropType.X by suffix; we charge ~3× the bare
+    // sellPrice as the basePrice so a Grade B crop sold via the market
+    // roughly matches direct-harvest revenue and Grade S clears more.
+    if (type.name.startsWith("CROP_")) {
+        val cropName = type.name.removePrefix("CROP_")
+        val crop = runCatching { CropType.valueOf(cropName) }.getOrNull()
+        if (crop != null) return (crop.sellPrice * 3).coerceAtLeast(10)
+    }
     // Beers
     return when (type) {
         ItemType.BEER_PALE_ALE   -> 220

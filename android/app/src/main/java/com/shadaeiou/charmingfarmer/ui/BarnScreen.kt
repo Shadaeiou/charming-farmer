@@ -11,6 +11,7 @@ import androidx.compose.foundation.layout.fillMaxSize
 import androidx.compose.foundation.layout.fillMaxWidth
 import androidx.compose.foundation.layout.height
 import androidx.compose.foundation.layout.padding
+import androidx.compose.foundation.layout.size
 import androidx.compose.foundation.rememberScrollState
 import androidx.compose.foundation.shape.RoundedCornerShape
 import androidx.compose.foundation.verticalScroll
@@ -85,6 +86,7 @@ fun BarnScreen(onBack: () -> Unit, onOpenMap: () -> Unit) {
             allowedDestinations = listOf(
                 Location.MALTHOUSE,
                 Location.BREWERY,
+                Location.KITCHEN,
                 Location.MARKET,
             ),
             onDismiss = { transportOpen = false },
@@ -97,11 +99,18 @@ fun BarnScreen(onBack: () -> Unit, onOpenMap: () -> Unit) {
     val raw = grouped.filterKeys { it.isRawCrop() }
     val processed = grouped.filterKeys { it.isProcessed() }
     val dishes = grouped.filterKeys { it.name.startsWith("DISH_") }
+    val crops = grouped.filterKeys { it.name.startsWith("CROP_") }
 
     Scaffold(
         topBar = {
             TopAppBar(
-                title = { Text("🏚️  Storage Barn", fontWeight = FontWeight.Bold) },
+                title = {
+                    Row(verticalAlignment = Alignment.CenterVertically) {
+                        BarnMapIcon(modifier = Modifier.size(28.dp))
+                        Spacer(Modifier.padding(end = 8.dp))
+                        Text("Storage Barn", fontWeight = FontWeight.Bold)
+                    }
+                },
                 navigationIcon = {
                     IconButton(onClick = onBack) {
                         Icon(Icons.AutoMirrored.Filled.ArrowBack, contentDescription = "Back")
@@ -160,6 +169,8 @@ fun BarnScreen(onBack: () -> Unit, onOpenMap: () -> Unit) {
                 Spacer(Modifier.height(8.dp))
 
                 BarnSection("🍽️ Artisan dishes", dishes)
+                Spacer(Modifier.height(10.dp))
+                BarnSection("🥕 Farm crops", crops)
                 Spacer(Modifier.height(10.dp))
                 BarnSection("🟡 Malt & processed", processed)
                 Spacer(Modifier.height(10.dp))

@@ -130,6 +130,37 @@ enum class ItemType(val displayName: String, val emoji: String) {
     DISH_PINEAPPLE_SALSA("Pineapple Salsa", "🌶️"),
     DISH_WATERMELON_SORBET("Watermelon Sorbet", "🍧"),
     DISH_TRUFFLE_RISOTTO("Truffle Risotto", "🍚"),
+
+    // Raw farm crops harvested into the silo. Naming mirrors CropType
+    // so a producer can map CropType → ItemType by string suffix
+    // ("CROP_${cropType.name}").
+    CROP_CARROT("Carrot", "🥕"),
+    CROP_POTATO("Potato", "🥔"),
+    CROP_LETTUCE("Lettuce", "🥬"),
+    CROP_ONION("Onion", "🧅"),
+    CROP_WHEAT("Wheat", "🌾"),
+    CROP_CORN("Corn", "🌽"),
+    CROP_BEAN("Bean", "🫘"),
+    CROP_STRAWBERRY("Strawberry", "🍓"),
+    CROP_MUSHROOM("Mushroom", "🍄"),
+    CROP_BROCCOLI("Broccoli", "🥦"),
+    CROP_ZUCCHINI("Zucchini", "🥒"),
+    CROP_TOMATO("Tomato", "🍅"),
+    CROP_BLUEBERRY("Blueberry", "🫐"),
+    CROP_GRAPE("Grape", "🍇"),
+    CROP_PUMPKIN("Pumpkin", "🎃"),
+    CROP_PEPPER("Pepper", "🫑"),
+    CROP_PINEAPPLE("Pineapple", "🍍"),
+    CROP_WATERMELON("Watermelon", "🍉"),
+    CROP_GARLIC("Garlic", "🧄"),
+    CROP_KIWI("Kiwi", "🥝"),
+    CROP_PEANUT("Peanut", "🥜"),
+    CROP_HOT_PEPPER("Hot Pepper", "🌶️"),
+    CROP_SNAP_PEA("Snap Pea", "🫛"),
+    CROP_SAFFRON("Saffron", "🌸"),
+    CROP_VANILLA("Vanilla", "🌺"),
+    CROP_PURPLE_YAM("Purple Yam", "🍠"),
+    CROP_TRUFFLE("Truffle", "🌰"),
     ;
 
     companion object {

@@ -8,6 +8,24 @@ data class ReleaseNote(
 
 val CHANGELOG: List<ReleaseNote> = listOf(
     ReleaseNote(
+        version = "0.1.53",
+        date = "2026-05-08",
+        bullets = listOf(
+            "🚗 Garage is open! New tile east of the Barn — buy and manage every transport vehicle from one screen",
+            "Five new vehicles: Handcart (12kg), Cargo Bike (45kg), Pickup Truck (200kg), Delivery Van (400kg), Box Truck (800kg) — work up from your starter wheelbarrow all the way to a 800kg hauler",
+            "Paint your vehicles any color with an RGB slider picker — pick on purchase or repaint anytime in the garage",
+            "Sell vehicles back for 50% of their purchase price (vehicles already on a trip have to come home first)",
+            "Fleet runs in parallel: every owned vehicle can be on its own trip simultaneously — bigger fleets = more shipping throughput",
+            "🥕 Harvested crops now drop into the silo as ItemStacks (with quality grades) on top of the coin payout — ship them to the kitchen for cooking or to the market for premium prices",
+            "Storage Barn has a new Farm Crops section grouping every harvested vegetable, fruit, and grain by type",
+            "🚚 Transport panel: tap −/+ or Max to choose how many to send per trip (capped by stock and your largest vehicle)",
+            "🍳 Kitchen recipes you can't afford now grey out, with the missing 🪙 or ⚡ value highlighted in red",
+            "🔔 Push notification settings — toggle crops-ready, crafting-done, and transport-arrived alerts independently; quiet-while-playing is on by default",
+            "🏚️ Storage Barn header shows the same pixel-art barn icon as the world map; map-side barn icon is sized to match the other building tiles",
+            "🏪 New pixel-art Market icon on the world map matches the striped-awning stall in the market screen",
+        ),
+    ),
+    ReleaseNote(
         version = "0.1.52",
         date = "2026-05-07",
         bullets = listOf(

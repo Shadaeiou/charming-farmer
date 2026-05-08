@@ -21,12 +21,14 @@ import androidx.navigation.compose.NavHost
 import androidx.navigation.compose.composable
 import androidx.navigation.compose.rememberNavController
 import com.shadaeiou.charmingfarmer.data.DownloadResult
+import com.shadaeiou.charmingfarmer.data.NotificationSettings
 import com.shadaeiou.charmingfarmer.data.Updater
 import com.shadaeiou.charmingfarmer.ui.BarnScreen
 import com.shadaeiou.charmingfarmer.ui.BirdwatchingScreen
 import com.shadaeiou.charmingfarmer.ui.BreweryScreen
 import com.shadaeiou.charmingfarmer.ui.FarmerTheme
 import com.shadaeiou.charmingfarmer.ui.FishingScreen
+import com.shadaeiou.charmingfarmer.ui.GarageScreen
 import com.shadaeiou.charmingfarmer.ui.HomeScreen
 import com.shadaeiou.charmingfarmer.ui.HouseScreen
 import com.shadaeiou.charmingfarmer.ui.KitchenScreen
@@ -54,12 +56,23 @@ class MainActivity : ComponentActivity() {
     override fun onCreate(savedInstanceState: Bundle?) {
         super.onCreate(savedInstanceState)
         maybeRequestNotificationPermission()
+        NotificationSettings.init(applicationContext)
         handleAutoUpdateIntent(intent)
         setContent {
             FarmerTheme {
                 Surface(modifier = Modifier.fillMaxSize()) { Root() }
             }
         }
+    }
+
+    override fun onStart() {
+        super.onStart()
+        NotificationSettings.appInForeground = true
+    }
+
+    override fun onStop() {
+        NotificationSettings.appInForeground = false
+        super.onStop()
     }
 
     private fun maybeRequestNotificationPermission() {
@@ -240,6 +253,13 @@ private fun Root() {
         composable("market") {
             saveLastDest("market")
             MarketScreen(
+                onBack = { nav.popBackStack() },
+                onOpenMap = { nav.navigate("map") },
+            )
+        }
+        composable("garage") {
+            saveLastDest("garage")
+            GarageScreen(
                 onBack = { nav.popBackStack() },
                 onOpenMap = { nav.navigate("map") },
             )

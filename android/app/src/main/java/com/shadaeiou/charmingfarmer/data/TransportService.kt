@@ -42,9 +42,10 @@ enum class Location(val displayName: String, val emoji: String) {
         MALTHOUSE -> item in MALTING_GRAINS
         BREWERY -> item in BREWERY_INPUTS || item.name.startsWith("HOPS")
             || item.name.startsWith("YEAST_") || item.name.startsWith("MALT_")
-        // Kitchen recipes are coin-priced for now (player buys ingredients
-        // off-screen). Finished dishes deposit straight into the FARM silo.
-        KITCHEN -> false
+        // Kitchen accepts raw farm crops (ingredients for recipes).
+        // Recipes are still coin-priced today but crops shipped here will
+        // be consumed by a future inventory-based recipe flow.
+        KITCHEN -> item.name.startsWith("CROP_")
         MARKET -> true
         CELLAR -> item.name.startsWith("BEER_")
     }
@@ -67,9 +68,14 @@ enum class VehicleType(
     val unlockCost: Int,
 ) {
     WHEELBARROW("Wheelbarrow", "🛒", 5, 5 * 60_000L, 2, 0, 0),
+    HANDCART("Handcart", "🛍️", 12, 6 * 60_000L, 2, 0, 200),
     HORSE_CART("Horse Cart", "🐎", 25, 8 * 60_000L, 3, 0, 600),
-    TRUCK("Truck", "🚜", 100, 4 * 60_000L, 5, 5, 6_000),
+    CARGO_BIKE("Cargo Bike", "🚲", 45, 5 * 60_000L, 3, 0, 2_500),
+    TRUCK("Tractor", "🚜", 100, 4 * 60_000L, 5, 5, 6_000),
+    PICKUP_TRUCK("Pickup Truck", "🛻", 200, 4 * 60_000L, 5, 8, 35_000),
+    DELIVERY_VAN("Delivery Van", "🚐", 400, 3 * 60_000L, 6, 12, 100_000),
     TRAIN("Train", "🚂", 500, 2 * 60_000L, 8, 25, 80_000),
+    BOX_TRUCK("Box Truck", "🚚", 800, 3 * 60_000L, 7, 20, 500_000),
 }
 
 data class Trip(
@@ -116,6 +122,7 @@ class TransportService private constructor(appContext: Context) {
 
     private val _inventories: MutableMap<Location, Inventory> = mutableMapOf()
     private val _vehiclesOwned: MutableSet<VehicleType> = mutableSetOf()
+    private val _vehicleColors: MutableMap<VehicleType, Int> = mutableMapOf()
     val activeTrips = mutableStateListOf<Trip>()
     private var nextTripId: Long = 1L
 
@@ -127,6 +134,7 @@ class TransportService private constructor(appContext: Context) {
         // Wheelbarrow is always free; ensure it's persisted for new users.
         if (VehicleType.WHEELBARROW !in _vehiclesOwned) {
             _vehiclesOwned += VehicleType.WHEELBARROW
+            _vehicleColors[VehicleType.WHEELBARROW] = VehicleOwnedEntity.DEFAULT_VEHICLE_COLOR
             db.vehicles().insert(VehicleOwnedEntity(VehicleType.WHEELBARROW.name))
         }
     }
@@ -228,22 +236,49 @@ class TransportService private constructor(appContext: Context) {
     fun reload() {
         _inventories.clear()
         _vehiclesOwned.clear()
+        _vehicleColors.clear()
         activeTrips.clear()
         nextTripId = 1L
         load()
         if (VehicleType.WHEELBARROW !in _vehiclesOwned) {
             _vehiclesOwned += VehicleType.WHEELBARROW
+            _vehicleColors[VehicleType.WHEELBARROW] = VehicleOwnedEntity.DEFAULT_VEHICLE_COLOR
             db.vehicles().insert(VehicleOwnedEntity(VehicleType.WHEELBARROW.name))
         }
         bump()
     }
 
-    fun unlockVehicle(vehicle: VehicleType): Boolean {
+    fun unlockVehicle(vehicle: VehicleType, colorArgb: Int = VehicleOwnedEntity.DEFAULT_VEHICLE_COLOR): Boolean {
         if (vehicle in _vehiclesOwned) return false
         _vehiclesOwned += vehicle
-        db.vehicles().insert(VehicleOwnedEntity(vehicle.name))
+        _vehicleColors[vehicle] = colorArgb
+        db.vehicles().insert(VehicleOwnedEntity(vehicle.name, colorArgb))
         bump()
         return true
+    }
+
+    /** Sell an owned vehicle for 50% of its unlock cost. Wheelbarrow is
+     *  the starter and cannot be sold; vehicles in transit cannot be
+     *  sold either. */
+    fun sellVehicle(vehicle: VehicleType, nowMs: Long): Int? {
+        if (vehicle == VehicleType.WHEELBARROW) return null
+        if (vehicle !in _vehiclesOwned) return null
+        if (!vehicleAvailable(vehicle, nowMs)) return null
+        _vehiclesOwned -= vehicle
+        _vehicleColors.remove(vehicle)
+        db.vehicles().deleteByName(vehicle.name)
+        bump()
+        return vehicle.unlockCost / 2
+    }
+
+    fun colorOf(vehicle: VehicleType): Int =
+        _vehicleColors[vehicle] ?: VehicleOwnedEntity.DEFAULT_VEHICLE_COLOR
+
+    fun setColor(vehicle: VehicleType, colorArgb: Int) {
+        if (vehicle !in _vehiclesOwned) return
+        _vehicleColors[vehicle] = colorArgb
+        db.vehicles().updateColor(vehicle.name, colorArgb)
+        bump()
     }
 
     private fun bump() { revisionTick = revisionTick + 1 }
@@ -255,9 +290,12 @@ class TransportService private constructor(appContext: Context) {
             val stacks = rows.mapNotNull { it.toItemStackOrNull() }
             _inventories[location] = Inventory(stacks)
         }
-        // Vehicles
-        db.vehicles().getAll().forEach { name ->
-            runCatching { VehicleType.valueOf(name) }.getOrNull()?.let { _vehiclesOwned += it }
+        // Vehicles + per-vehicle paint color
+        db.vehicles().getAll().forEach { entity ->
+            runCatching { VehicleType.valueOf(entity.vehicle) }.getOrNull()?.let { vt ->
+                _vehiclesOwned += vt
+                _vehicleColors[vt] = entity.colorArgb
+            }
         }
         // Trips
         db.trips().getAll().forEach { row ->

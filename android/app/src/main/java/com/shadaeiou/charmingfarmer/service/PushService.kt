@@ -9,12 +9,18 @@ import com.shadaeiou.charmingfarmer.BuildConfig
 import com.shadaeiou.charmingfarmer.MainActivity
 import com.shadaeiou.charmingfarmer.R
 import com.shadaeiou.charmingfarmer.FarmerApp
+import com.shadaeiou.charmingfarmer.data.NotificationSettings
 import com.google.firebase.messaging.FirebaseMessagingService
 import com.google.firebase.messaging.RemoteMessage
 
 class PushService : FirebaseMessagingService() {
 
     override fun onMessageReceived(message: RemoteMessage) {
+        // Gameplay channels respect the per-user notification preferences
+        // configured in Settings; update pushes always go through so a
+        // player can never miss a critical app update.
+        NotificationSettings.init(applicationContext)
+
         val data = message.data
         if (data["type"] == "update") {
             val versionCode = data["versionCode"]?.toIntOrNull() ?: return
@@ -25,6 +31,17 @@ class PushService : FirebaseMessagingService() {
             showUpdateNotification(versionName, versionCode)
             return
         }
+
+        // Server uses well-known type strings for in-game events. Each
+        // maps to a NotificationSettings.Channel so the player's toggles
+        // actually gate delivery.
+        val channel = when (data["type"]) {
+            "crops_ready" -> NotificationSettings.Channel.CROPS_READY
+            "craft_done"  -> NotificationSettings.Channel.CRAFT_DONE
+            "trip_done"   -> NotificationSettings.Channel.TRIP_DONE
+            else          -> null
+        }
+        if (channel != null && !NotificationSettings.shouldNotify(channel)) return
 
         message.notification?.let { notif ->
             val builder = NotificationCompat.Builder(this, FarmerApp.CHANNEL_UPDATES)

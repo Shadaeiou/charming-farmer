@@ -37,6 +37,7 @@ import androidx.compose.runtime.setValue
 import androidx.compose.ui.Alignment
 import androidx.compose.ui.Modifier
 import androidx.compose.ui.platform.LocalContext
+import androidx.compose.ui.text.font.FontWeight
 import androidx.compose.ui.text.style.TextAlign
 import androidx.compose.ui.unit.dp
 import com.shadaeiou.charmingfarmer.BuildConfig
@@ -44,6 +45,7 @@ import com.shadaeiou.charmingfarmer.data.CHANGELOG
 import com.shadaeiou.charmingfarmer.data.DebugSettings
 import com.shadaeiou.charmingfarmer.data.DownloadResult
 import com.shadaeiou.charmingfarmer.data.FarmGame
+import com.shadaeiou.charmingfarmer.data.NotificationSettings
 import com.shadaeiou.charmingfarmer.data.ReleaseNote
 import com.shadaeiou.charmingfarmer.data.UpdateInfo
 import com.shadaeiou.charmingfarmer.data.Updater
@@ -201,6 +203,12 @@ fun SettingsScreen(
             HorizontalDivider()
             Spacer(Modifier.height(16.dp))
 
+            NotificationsSection()
+
+            Spacer(Modifier.height(16.dp))
+            HorizontalDivider()
+            Spacer(Modifier.height(16.dp))
+
             DebugSection(onResetComplete = onResetComplete)
 
             Spacer(Modifier.height(16.dp))
@@ -210,6 +218,64 @@ fun SettingsScreen(
             ChangelogSection()
         }
     }
+}
+
+@Composable
+private fun NotificationsSection() {
+    val ctx = LocalContext.current
+    LaunchedEffect(Unit) { NotificationSettings.init(ctx.applicationContext) }
+
+    Text("🔔 Notifications", style = MaterialTheme.typography.titleMedium)
+    Spacer(Modifier.height(4.dp))
+    Text(
+        "Push alerts when something on your farm needs your attention. " +
+            "Notifications are skipped while you're already in the app.",
+        style = MaterialTheme.typography.labelSmall,
+        color = MaterialTheme.colorScheme.onSurfaceVariant,
+    )
+    Spacer(Modifier.height(12.dp))
+
+    DebugToggleRow(
+        title = "Send push notifications",
+        description = "Master switch — turn off to silence every channel below.",
+        checked = NotificationSettings.pushEnabled,
+        onChange = { NotificationSettings.updatePushEnabled(it) },
+    )
+    Spacer(Modifier.height(8.dp))
+    DebugToggleRow(
+        title = "Quiet while playing",
+        description = "Skip pushes when the app is open in the foreground (most players want this on).",
+        checked = NotificationSettings.silentInForeground,
+        onChange = { NotificationSettings.updateSilentInForeground(it) },
+    )
+
+    Spacer(Modifier.height(12.dp))
+    Text(
+        "Channels",
+        style = MaterialTheme.typography.titleSmall,
+        fontWeight = FontWeight.Bold,
+    )
+    Spacer(Modifier.height(8.dp))
+    DebugToggleRow(
+        title = "🌱 Crops ready to harvest",
+        description = "Alert when a planted crop or tree is ready to pick.",
+        checked = NotificationSettings.cropsReady,
+        onChange = { NotificationSettings.updateCropsReady(it) },
+    )
+    Spacer(Modifier.height(8.dp))
+    DebugToggleRow(
+        title = "🍳 Crafting / cooking finished",
+        description = "Alert when a kiln, brewery batch, or kitchen recipe completes.",
+        checked = NotificationSettings.craftDone,
+        onChange = { NotificationSettings.updateCraftDone(it) },
+    )
+    Spacer(Modifier.height(8.dp))
+    DebugToggleRow(
+        title = "🚚 Transport trip arrived",
+        description = "Alert when one of your vehicles delivers its cargo.",
+        checked = NotificationSettings.tripDone,
+        onChange = { NotificationSettings.updateTripDone(it) },
+    )
 }
 
 @Composable

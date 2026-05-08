@@ -94,7 +94,13 @@ data class InventoryStackEntity(
 @Entity(tableName = "vehicles_owned")
 data class VehicleOwnedEntity(
     @PrimaryKey val vehicle: String,
-)
+    @ColumnInfo(name = "color_argb", defaultValue = "-2236963") val colorArgb: Int = DEFAULT_VEHICLE_COLOR,
+) {
+    companion object {
+        // Warm tan (#DDD5DD ish) — neutral default that reads as "unpainted".
+        const val DEFAULT_VEHICLE_COLOR: Int = -2236963 // 0xFFDDDDDD as signed Int
+    }
+}
 
 @Entity(tableName = "transport_trips")
 data class TransportTripEntity(
@@ -271,14 +277,23 @@ interface InventoryDao {
 
 @Dao
 interface VehicleDao {
+    @Query("SELECT * FROM vehicles_owned")
+    fun getAll(): List<VehicleOwnedEntity>
+
     @Query("SELECT vehicle FROM vehicles_owned")
-    fun getAll(): List<String>
+    fun getAllNames(): List<String>
 
     @Insert(onConflict = OnConflictStrategy.REPLACE)
     fun insert(entity: VehicleOwnedEntity)
 
     @Insert(onConflict = OnConflictStrategy.REPLACE)
     fun insertAll(entities: List<VehicleOwnedEntity>)
+
+    @Query("UPDATE vehicles_owned SET color_argb = :color WHERE vehicle = :vehicle")
+    fun updateColor(vehicle: String, color: Int)
+
+    @Query("DELETE FROM vehicles_owned WHERE vehicle = :vehicle")
+    fun deleteByName(vehicle: String)
 
     @Query("DELETE FROM vehicles_owned")
     fun deleteAll()
@@ -503,6 +518,20 @@ val MIGRATION_6_7: Migration = object : Migration(6, 7) {
     }
 }
 
+val MIGRATION_7_8: Migration = object : Migration(7, 8) {
+    override fun migrate(db: SupportSQLiteDatabase) {
+        // Per-vehicle color paint. Default ARGB matches VehicleOwnedEntity.
+        db.execSQL(
+            "ALTER TABLE vehicles_owned ADD COLUMN color_argb INTEGER NOT NULL DEFAULT -2236963"
+        )
+        // Garage building at (2, -1) — east of the Barn cluster.
+        db.execSQL(
+            "INSERT OR IGNORE INTO land_tiles (x, y, owned_at_ms, structure) VALUES (?, ?, ?, ?)",
+            arrayOf<Any>(2, -1, System.currentTimeMillis(), "GARAGE"),
+        )
+    }
+}
+
 // -- Database ---------------------------------------------------------
 
 @Database(
@@ -520,7 +549,7 @@ val MIGRATION_6_7: Migration = object : Migration(6, 7) {
         LandTileEntity::class,
         KitchenRunEntity::class,
     ],
-    version = 7,
+    version = 8,
     exportSchema = false,
 )
 abstract class AppDatabase : RoomDatabase() {
@@ -556,7 +585,7 @@ abstract class AppDatabase : RoomDatabase() {
             // a coroutine scope held on the FarmGame, but at our scale
             // this stays well under a frame.
             Room.databaseBuilder(appContext, AppDatabase::class.java, "charming-farmer.db")
-                .addMigrations(MIGRATION_1_2, MIGRATION_2_3, MIGRATION_3_4, MIGRATION_4_5, MIGRATION_5_6, MIGRATION_6_7)
+                .addMigrations(MIGRATION_1_2, MIGRATION_2_3, MIGRATION_3_4, MIGRATION_4_5, MIGRATION_5_6, MIGRATION_6_7, MIGRATION_7_8)
                 .allowMainThreadQueries()
                 .build()
     }
