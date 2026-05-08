@@ -78,8 +78,14 @@ object GameReset {
             // MIGRATION_3_4 so a wiped player matches a fresh install.
             db.landTiles().upsertAll(starterLandTiles(now))
 
-            // Re-seed the free starter vehicle.
-            db.vehicles().insert(VehicleOwnedEntity(VehicleType.WHEELBARROW.name))
+            // Re-seed the free starter vehicle. TransportService.reload()
+            // below will name+color it via the standard backfill path.
+            db.vehicles().insert(
+                VehicleOwnedEntity(
+                    vehicle = VehicleType.WHEELBARROW.name,
+                    customName = "",
+                ),
+            )
 
             // Clear every system_meta key EXCEPT the legacy-migration
             // marker. Letting load() defaults handle the rest is simpler

@@ -8,6 +8,20 @@ data class ReleaseNote(
 
 val CHANGELOG: List<ReleaseNote> = listOf(
     ReleaseNote(
+        version = "0.1.55",
+        date = "2026-05-08",
+        bullets = listOf(
+            "🚗 Pixel-art vehicle icons! Every vehicle gets a hand-drawn silhouette tinted with its custom paint color, so a forest-green Box Truck looks unmistakably different from a fire-red one at a glance",
+            "Multiple vehicles per type — buy as many Box Trucks (or Wheelbarrows, or Trains) as your wallet can stomach. Each gets a unique name like \"Box Truck 1\", \"Box Truck 2\", and you can rename any of them when buying or editing in the Garage",
+            "Garage shows your fleet with each vehicle's painted icon, custom name, and live in-transit status",
+            "🍳 Kitchen now has a 🚚 ship button in the top bar — send cooked dishes straight to the Market without bouncing through the barn first",
+            "🏪 Market storage is unlimited — items stay there until you choose to sell them",
+            "Transport panel: Ship button is now sticky at the bottom of the dialog so you never have to scroll past every cargo row to dispatch",
+            "Capacity now displayed in lbs instead of kg (numbers unchanged — these are abstract weight units)",
+            "In-transit cargo manifest groups identical items together: \"🥕×42  🍅×17\" instead of repeating the same emoji ten times",
+        ),
+    ),
+    ReleaseNote(
         version = "0.1.54",
         date = "2026-05-08",
         bullets = listOf(

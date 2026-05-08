@@ -18,6 +18,7 @@ import androidx.compose.foundation.shape.RoundedCornerShape
 import androidx.compose.foundation.verticalScroll
 import androidx.compose.material.icons.Icons
 import androidx.compose.material.icons.automirrored.filled.ArrowBack
+import androidx.compose.material.icons.filled.LocalShipping
 import androidx.compose.material.icons.filled.Map
 import androidx.compose.material3.Card
 import androidx.compose.material3.CardDefaults
@@ -52,6 +53,7 @@ import com.shadaeiou.charmingfarmer.data.CookingRun
 import com.shadaeiou.charmingfarmer.data.FarmGame
 import com.shadaeiou.charmingfarmer.data.Kitchen
 import com.shadaeiou.charmingfarmer.data.KitchenRecipe
+import com.shadaeiou.charmingfarmer.data.Location
 import com.shadaeiou.charmingfarmer.data.TransportService
 import kotlinx.coroutines.delay
 
@@ -63,6 +65,7 @@ fun KitchenScreen(onBack: () -> Unit, onOpenMap: () -> Unit) {
     val transport = remember { TransportService.get(ctx.applicationContext) }
     val kitchen = remember { Kitchen.get(ctx.applicationContext) }
     var nowMs by remember { mutableLongStateOf(System.currentTimeMillis()) }
+    var transportOpen by remember { mutableStateOf(false) }
 
     LaunchedEffect(Unit) {
         while (true) {
@@ -77,6 +80,20 @@ fun KitchenScreen(onBack: () -> Unit, onOpenMap: () -> Unit) {
 
     @Suppress("UNUSED_EXPRESSION") kitchen.revisionTick
 
+    if (transportOpen) {
+        // Dishes deposit into the FARM silo when cooked, so we ship
+        // FROM Location.FARM with a filter that hides everything but
+        // dishes — keeps the kitchen-side panel focused on selling
+        // artisan goods.
+        TransportPanel(
+            transport = transport,
+            origin = Location.FARM,
+            allowedDestinations = listOf(Location.MARKET),
+            onDismiss = { transportOpen = false },
+            cargoFilter = { it.name.startsWith("DISH_") },
+        )
+    }
+
     val state = game.state
 
     Scaffold(
@@ -89,6 +106,9 @@ fun KitchenScreen(onBack: () -> Unit, onOpenMap: () -> Unit) {
                     }
                 },
                 actions = {
+                    IconButton(onClick = { transportOpen = true }) {
+                        Icon(Icons.Filled.LocalShipping, contentDescription = "Ship dishes")
+                    }
                     IconButton(onClick = onOpenMap) {
                         Icon(Icons.Filled.Map, contentDescription = "Map")
                     }

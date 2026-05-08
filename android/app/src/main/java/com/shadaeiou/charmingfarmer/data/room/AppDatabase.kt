@@ -93,11 +93,13 @@ data class InventoryStackEntity(
 
 @Entity(tableName = "vehicles_owned")
 data class VehicleOwnedEntity(
-    @PrimaryKey val vehicle: String,
+    @PrimaryKey(autoGenerate = true) val id: Long = 0L,
+    val vehicle: String,
+    @ColumnInfo(name = "custom_name", defaultValue = "") val customName: String = "",
     @ColumnInfo(name = "color_argb", defaultValue = "-2236963") val colorArgb: Int = DEFAULT_VEHICLE_COLOR,
 ) {
     companion object {
-        // Warm tan (#DDD5DD ish) — neutral default that reads as "unpainted".
+        // Warm tan default — neutral "unpainted" look.
         const val DEFAULT_VEHICLE_COLOR: Int = -2236963 // 0xFFDDDDDD as signed Int
     }
 }
@@ -106,6 +108,7 @@ data class VehicleOwnedEntity(
 data class TransportTripEntity(
     @PrimaryKey val id: Long,
     val vehicle: String,
+    @ColumnInfo(name = "vehicle_id", defaultValue = "0") val vehicleId: Long = 0L,
     val origin: String,
     val destination: String,
     @ColumnInfo(name = "cargo_json") val cargoJson: String,
@@ -280,20 +283,20 @@ interface VehicleDao {
     @Query("SELECT * FROM vehicles_owned")
     fun getAll(): List<VehicleOwnedEntity>
 
-    @Query("SELECT vehicle FROM vehicles_owned")
-    fun getAllNames(): List<String>
+    @Insert(onConflict = OnConflictStrategy.REPLACE)
+    fun insert(entity: VehicleOwnedEntity): Long
 
     @Insert(onConflict = OnConflictStrategy.REPLACE)
-    fun insert(entity: VehicleOwnedEntity)
+    fun insertAll(entities: List<VehicleOwnedEntity>): List<Long>
 
-    @Insert(onConflict = OnConflictStrategy.REPLACE)
-    fun insertAll(entities: List<VehicleOwnedEntity>)
+    @Query("UPDATE vehicles_owned SET color_argb = :color WHERE id = :id")
+    fun updateColor(id: Long, color: Int)
 
-    @Query("UPDATE vehicles_owned SET color_argb = :color WHERE vehicle = :vehicle")
-    fun updateColor(vehicle: String, color: Int)
+    @Query("UPDATE vehicles_owned SET custom_name = :name WHERE id = :id")
+    fun updateName(id: Long, name: String)
 
-    @Query("DELETE FROM vehicles_owned WHERE vehicle = :vehicle")
-    fun deleteByName(vehicle: String)
+    @Query("DELETE FROM vehicles_owned WHERE id = :id")
+    fun deleteById(id: Long)
 
     @Query("DELETE FROM vehicles_owned")
     fun deleteAll()
@@ -532,6 +535,50 @@ val MIGRATION_7_8: Migration = object : Migration(7, 8) {
     }
 }
 
+val MIGRATION_8_9: Migration = object : Migration(8, 9) {
+    override fun migrate(db: SupportSQLiteDatabase) {
+        // Multi-instance vehicles: each owned vehicle now has its own
+        // auto-gen id, custom name, and color. Old schema keyed by
+        // vehicle TYPE means existing rows become the "first instance"
+        // of that type.
+        db.execSQL(
+            """
+            CREATE TABLE vehicles_owned_new (
+                id INTEGER NOT NULL PRIMARY KEY AUTOINCREMENT,
+                vehicle TEXT NOT NULL,
+                custom_name TEXT NOT NULL DEFAULT '',
+                color_argb INTEGER NOT NULL DEFAULT -2236963
+            )
+            """.trimIndent()
+        )
+        db.execSQL(
+            """
+            INSERT INTO vehicles_owned_new (vehicle, custom_name, color_argb)
+                SELECT vehicle, '', color_argb FROM vehicles_owned
+            """.trimIndent()
+        )
+        db.execSQL("DROP TABLE vehicles_owned")
+        db.execSQL("ALTER TABLE vehicles_owned_new RENAME TO vehicles_owned")
+
+        // Trips need to remember which specific vehicle instance is on
+        // the road, not just the type — multiple Box Trucks can be in
+        // transit simultaneously now.
+        db.execSQL(
+            "ALTER TABLE transport_trips ADD COLUMN vehicle_id INTEGER NOT NULL DEFAULT 0"
+        )
+        // Hook each in-flight trip up to the (only) instance of its
+        // vehicle type that exists post-migration.
+        db.execSQL(
+            """
+            UPDATE transport_trips SET vehicle_id = COALESCE(
+                (SELECT id FROM vehicles_owned WHERE vehicles_owned.vehicle = transport_trips.vehicle LIMIT 1),
+                0
+            )
+            """.trimIndent()
+        )
+    }
+}
+
 // -- Database ---------------------------------------------------------
 
 @Database(
@@ -549,7 +596,7 @@ val MIGRATION_7_8: Migration = object : Migration(7, 8) {
         LandTileEntity::class,
         KitchenRunEntity::class,
     ],
-    version = 8,
+    version = 9,
     exportSchema = false,
 )
 abstract class AppDatabase : RoomDatabase() {
@@ -585,7 +632,7 @@ abstract class AppDatabase : RoomDatabase() {
             // a coroutine scope held on the FarmGame, but at our scale
             // this stays well under a frame.
             Room.databaseBuilder(appContext, AppDatabase::class.java, "charming-farmer.db")
-                .addMigrations(MIGRATION_1_2, MIGRATION_2_3, MIGRATION_3_4, MIGRATION_4_5, MIGRATION_5_6, MIGRATION_6_7, MIGRATION_7_8)
+                .addMigrations(MIGRATION_1_2, MIGRATION_2_3, MIGRATION_3_4, MIGRATION_4_5, MIGRATION_5_6, MIGRATION_6_7, MIGRATION_7_8, MIGRATION_8_9)
                 .allowMainThreadQueries()
                 .build()
     }

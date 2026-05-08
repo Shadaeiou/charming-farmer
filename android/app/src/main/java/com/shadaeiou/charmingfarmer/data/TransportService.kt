@@ -29,22 +29,17 @@ enum class Location(val displayName: String, val emoji: String) {
     ;
 
     /**
-     * What this location is willing to receive. Drives the transport
-     * panel's per-item destination chips so the player only sees
-     * sensible routes (no "ship hops to the malthouse").
-     *
-     * FARM is a catch-all return location — anything can come back to
-     * the silo. MARKET sells anything. Specialised locations only
-     * accept inputs to their actual processes.
+     * What this location is willing to receive. FARM / MARKET are the
+     * universal sinks; specialised buildings only accept their inputs
+     * (or, in MARKET's case, anything because everything sells).
      */
     fun accepts(item: ItemType): Boolean = when (this) {
         FARM -> true
         MALTHOUSE -> item in MALTING_GRAINS
         BREWERY -> item in BREWERY_INPUTS || item.name.startsWith("HOPS")
             || item.name.startsWith("YEAST_") || item.name.startsWith("MALT_")
-        // Kitchen accepts raw farm crops (ingredients for recipes).
-        // Recipes are still coin-priced today but crops shipped here will
-        // be consumed by a future inventory-based recipe flow.
+        // Kitchen accepts raw farm crops as forward-looking ingredient
+        // inventory. Recipes are still coin-priced today.
         KITCHEN -> item.name.startsWith("CROP_")
         MARKET -> true
         CELLAR -> item.name.startsWith("BEER_")
@@ -61,7 +56,7 @@ enum class Location(val displayName: String, val emoji: String) {
 enum class VehicleType(
     val displayName: String,
     val emoji: String,
-    val capacityKg: Int,
+    val capacityLbs: Int,
     val tripDurationMs: Long,
     val energyCost: Int,
     val coinCost: Int,
@@ -78,9 +73,28 @@ enum class VehicleType(
     BOX_TRUCK("Box Truck", "🚚", 800, 3 * 60_000L, 7, 20, 500_000),
 }
 
+/**
+ * One actual vehicle owned by the player. Multiple instances of the
+ * same [type] can be owned (Box Truck 1, Box Truck 2, …). Identified
+ * uniquely by [id]; trips reserve a specific instance, not just a type.
+ */
+data class OwnedVehicle(
+    val id: Long,
+    val type: VehicleType,
+    val customName: String,
+    val colorArgb: Int,
+) {
+    /** The user-facing name. Empty customName falls back to "Type N"
+     *  but that fallback is computed by the service when a vehicle is
+     *  first inserted, so this is a simple non-blank getter. */
+    val displayName: String
+        get() = customName.ifBlank { type.displayName }
+}
+
 data class Trip(
     val id: Long,
-    val vehicle: VehicleType,
+    val vehicleId: Long,
+    val vehicleType: VehicleType,
     val origin: Location,
     val destination: Location,
     val cargo: List<ItemStack>,
@@ -102,17 +116,12 @@ data class Trip(
 }
 
 /**
- * App-wide singleton, now backed by Room. State that this service
- * owns:
+ * App-wide singleton, backed by Room. State this service owns:
  *   - Per-location inventories (one row per ItemStack in inventory_stacks)
- *   - Owned vehicles (vehicles_owned)
- *   - In-flight trips (transport_trips, cargo serialized as JSON since
- *     it's read/written as a unit)
+ *   - Owned vehicle instances (vehicles_owned, multi-instance per type)
+ *   - In-flight trips (transport_trips, vehicleId reserves a specific
+ *     vehicle until the trip arrives)
  *   - nextTripId counter (system_meta)
- *
- * Inventory edits use Room's @Transaction-backed replaceForLocation so
- * a ship() that subtracts from origin and adds to destination cannot
- * land half-applied even if interrupted.
  */
 class TransportService private constructor(appContext: Context) {
 
@@ -121,8 +130,7 @@ class TransportService private constructor(appContext: Context) {
     }
 
     private val _inventories: MutableMap<Location, Inventory> = mutableMapOf()
-    private val _vehiclesOwned: MutableSet<VehicleType> = mutableSetOf()
-    private val _vehicleColors: MutableMap<VehicleType, Int> = mutableMapOf()
+    private val _ownedVehicles: MutableMap<Long, OwnedVehicle> = mutableMapOf()
     val activeTrips = mutableStateListOf<Trip>()
     private var nextTripId: Long = 1L
 
@@ -131,22 +139,26 @@ class TransportService private constructor(appContext: Context) {
 
     init {
         load()
-        // Wheelbarrow is always free; ensure it's persisted for new users.
-        if (VehicleType.WHEELBARROW !in _vehiclesOwned) {
-            _vehiclesOwned += VehicleType.WHEELBARROW
-            _vehicleColors[VehicleType.WHEELBARROW] = VehicleOwnedEntity.DEFAULT_VEHICLE_COLOR
-            db.vehicles().insert(VehicleOwnedEntity(VehicleType.WHEELBARROW.name))
-        }
+        ensureStarterWheelbarrow()
+        // Migrated rows from MIGRATION_8_9 land with custom_name="" —
+        // backfill a sensible default so the garage doesn't show empty
+        // labels.
+        backfillCustomNames()
     }
 
     fun inventoryAt(location: Location): Inventory =
         _inventories[location] ?: Inventory()
 
-    fun vehiclesOwned(): Set<VehicleType> = _vehiclesOwned.toSet()
+    fun vehiclesOwned(): List<OwnedVehicle> =
+        _ownedVehicles.values.sortedWith(
+            compareBy({ it.type.ordinal }, { it.id })
+        )
 
-    fun vehicleAvailable(vehicle: VehicleType, nowMs: Long): Boolean {
-        if (vehicle !in _vehiclesOwned) return false
-        return activeTrips.none { it.vehicle == vehicle && !it.isComplete(nowMs) }
+    fun vehicleById(id: Long): OwnedVehicle? = _ownedVehicles[id]
+
+    fun vehicleAvailable(id: Long, nowMs: Long): Boolean {
+        if (id !in _ownedVehicles) return false
+        return activeTrips.none { it.vehicleId == id && !it.isComplete(nowMs) }
     }
 
     fun addToInventory(location: Location, stack: ItemStack) {
@@ -163,43 +175,35 @@ class TransportService private constructor(appContext: Context) {
         bump()
     }
 
-    /**
-     * Try to move [amount] of [type] (lowest-quality first) from [from] to
-     * [to] using [vehicle]. Returns the new trip on success, null if the
-     * vehicle isn't available, the inventory is short, or the cargo would
-     * exceed vehicle capacity.
-     */
+    /** Single-item dispatch — convenience wrapper around [shipMultiple]. */
     fun ship(
         from: Location,
         to: Location,
         type: ItemType,
         amount: Int,
-        vehicle: VehicleType,
+        vehicleId: Long,
         nowMs: Long,
-    ): Trip? = shipMultiple(from, to, mapOf(type to amount), vehicle, nowMs)
+    ): Trip? = shipMultiple(from, to, mapOf(type to amount), vehicleId, nowMs)
 
     /**
-     * Multi-item dispatch: load several different ItemTypes into one
-     * [vehicle], all bound for [to]. Cargo map keys are the item types,
-     * values are unit counts (1kg per unit). Returns null if the
+     * Multi-item dispatch: load several different ItemTypes onto one
+     * vehicle instance, all bound for [to]. Returns null if the
      * vehicle is busy, the total quantity exceeds capacity, or any item
      * has fewer units in stock than requested.
-     *
-     * Future-ready: a multi-stop route variant will accept a list of
-     * (destination, cargo) pairs and build the trip the same way.
      */
     fun shipMultiple(
         from: Location,
         to: Location,
         cargo: Map<ItemType, Int>,
-        vehicle: VehicleType,
+        vehicleId: Long,
         nowMs: Long,
     ): Trip? {
-        if (!vehicleAvailable(vehicle, nowMs)) return null
+        val owned = _ownedVehicles[vehicleId] ?: return null
+        if (!vehicleAvailable(vehicleId, nowMs)) return null
         val cleaned = cargo.filterValues { it > 0 }
         if (cleaned.isEmpty()) return null
         val total = cleaned.values.sum()
-        if (total > vehicle.capacityKg) return null
+        if (total > owned.type.capacityLbs) return null
 
         var inventory = inventoryAt(from)
         val pulled = mutableListOf<ItemStack>()
@@ -212,12 +216,13 @@ class TransportService private constructor(appContext: Context) {
         val tripId = nextTripId++
         val trip = Trip(
             id = tripId,
-            vehicle = vehicle,
+            vehicleId = vehicleId,
+            vehicleType = owned.type,
             origin = from,
             destination = to,
             cargo = pulled,
             startMs = nowMs,
-            durationMs = vehicle.tripDurationMs,
+            durationMs = owned.type.tripDurationMs,
         )
         db.runInTransaction {
             db.inventory().replaceForLocation(from.name, inventory.toEntities(from))
@@ -232,14 +237,11 @@ class TransportService private constructor(appContext: Context) {
 
     /**
      * Process completed trips: drain their cargo into the destination
-     * inventory and remove them from the active list. Idempotent — call
-     * from a tick loop.
+     * inventory and remove them from the active list. Idempotent.
      */
     fun tick(nowMs: Long) {
         val done = activeTrips.filter { it.isComplete(nowMs) }
         if (done.isEmpty()) return
-        // Group cargo by destination so the per-location inventory write
-        // happens once per destination instead of per-stack.
         val byDest: Map<Location, List<ItemStack>> = done
             .groupBy { it.destination }
             .mapValues { (_, trips) -> trips.flatMap { it.cargo } }
@@ -256,55 +258,112 @@ class TransportService private constructor(appContext: Context) {
         bump()
     }
 
-    /**
-     * Drop in-memory state and re-read from the (presumably freshly
-     * wiped or re-seeded) DB. Used by full-game reset.
-     */
+    /** Drop in-memory state and re-read from a freshly wiped or
+     *  re-seeded DB. Used by the full-game reset. */
     fun reload() {
         _inventories.clear()
-        _vehiclesOwned.clear()
-        _vehicleColors.clear()
+        _ownedVehicles.clear()
         activeTrips.clear()
         nextTripId = 1L
         load()
-        if (VehicleType.WHEELBARROW !in _vehiclesOwned) {
-            _vehiclesOwned += VehicleType.WHEELBARROW
-            _vehicleColors[VehicleType.WHEELBARROW] = VehicleOwnedEntity.DEFAULT_VEHICLE_COLOR
-            db.vehicles().insert(VehicleOwnedEntity(VehicleType.WHEELBARROW.name))
+        ensureStarterWheelbarrow()
+        backfillCustomNames()
+        bump()
+    }
+
+    /**
+     * Buy a fresh vehicle of [type] with the given [customName] and
+     * paint [colorArgb]. Returns the new instance with its assigned id,
+     * or null if the insert failed (which shouldn't happen in practice).
+     */
+    fun unlockVehicle(
+        type: VehicleType,
+        customName: String = defaultNameFor(type),
+        colorArgb: Int = VehicleOwnedEntity.DEFAULT_VEHICLE_COLOR,
+    ): OwnedVehicle? {
+        val nameToUse = customName.ifBlank { defaultNameFor(type) }
+        val newId = db.vehicles().insert(
+            VehicleOwnedEntity(
+                vehicle = type.name,
+                customName = nameToUse,
+                colorArgb = colorArgb,
+            )
+        )
+        if (newId <= 0) return null
+        val owned = OwnedVehicle(newId, type, nameToUse, colorArgb)
+        _ownedVehicles[newId] = owned
+        bump()
+        return owned
+    }
+
+    /** Sell an owned vehicle for 50% of its unlock cost. The starter
+     *  wheelbarrow (the only free one) and vehicles already in transit
+     *  cannot be sold. Returns the payout, or null on failure. */
+    fun sellVehicle(id: Long, nowMs: Long): Int? {
+        val owned = _ownedVehicles[id] ?: return null
+        // Don't let the player sell their last free wheelbarrow.
+        if (owned.type == VehicleType.WHEELBARROW &&
+            _ownedVehicles.values.count { it.type == VehicleType.WHEELBARROW } == 1) {
+            return null
         }
+        if (!vehicleAvailable(id, nowMs)) return null
+        _ownedVehicles.remove(id)
+        db.vehicles().deleteById(id)
+        bump()
+        return owned.type.unlockCost / 2
+    }
+
+    fun setColor(id: Long, colorArgb: Int) {
+        val owned = _ownedVehicles[id] ?: return
+        _ownedVehicles[id] = owned.copy(colorArgb = colorArgb)
+        db.vehicles().updateColor(id, colorArgb)
         bump()
     }
 
-    fun unlockVehicle(vehicle: VehicleType, colorArgb: Int = VehicleOwnedEntity.DEFAULT_VEHICLE_COLOR): Boolean {
-        if (vehicle in _vehiclesOwned) return false
-        _vehiclesOwned += vehicle
-        _vehicleColors[vehicle] = colorArgb
-        db.vehicles().insert(VehicleOwnedEntity(vehicle.name, colorArgb))
+    fun renameVehicle(id: Long, newName: String) {
+        val owned = _ownedVehicles[id] ?: return
+        val nameToUse = newName.ifBlank { defaultNameFor(owned.type) }
+        _ownedVehicles[id] = owned.copy(customName = nameToUse)
+        db.vehicles().updateName(id, nameToUse)
         bump()
-        return true
     }
 
-    /** Sell an owned vehicle for 50% of its unlock cost. Wheelbarrow is
-     *  the starter and cannot be sold; vehicles in transit cannot be
-     *  sold either. */
-    fun sellVehicle(vehicle: VehicleType, nowMs: Long): Int? {
-        if (vehicle == VehicleType.WHEELBARROW) return null
-        if (vehicle !in _vehiclesOwned) return null
-        if (!vehicleAvailable(vehicle, nowMs)) return null
-        _vehiclesOwned -= vehicle
-        _vehicleColors.remove(vehicle)
-        db.vehicles().deleteByName(vehicle.name)
-        bump()
-        return vehicle.unlockCost / 2
+    /** Suggested name for the next vehicle of [type] purchased — picks
+     *  the smallest positive integer that isn't already in use as the
+     *  trailing number, so renaming or selling a middle entry doesn't
+     *  leave gaps. */
+    fun defaultNameFor(type: VehicleType): String {
+        val prefix = type.displayName
+        val takenIndices = _ownedVehicles.values
+            .filter { it.type == type }
+            .mapNotNull { it.customName.removePrefix("$prefix ").toIntOrNull() }
+            .toSet()
+        var n = 1
+        while (n in takenIndices) n += 1
+        return "$prefix $n"
     }
 
-    fun colorOf(vehicle: VehicleType): Int =
-        _vehicleColors[vehicle] ?: VehicleOwnedEntity.DEFAULT_VEHICLE_COLOR
+    private fun ensureStarterWheelbarrow() {
+        if (_ownedVehicles.values.any { it.type == VehicleType.WHEELBARROW }) return
+        unlockVehicle(VehicleType.WHEELBARROW)
+    }
 
-    fun setColor(vehicle: VehicleType, colorArgb: Int) {
-        if (vehicle !in _vehiclesOwned) return
-        _vehicleColors[vehicle] = colorArgb
-        db.vehicles().updateColor(vehicle.name, colorArgb)
+    private fun backfillCustomNames() {
+        // Rows imported from MIGRATION_8_9 have customName == "". Give
+        // each one the canonical "{Type} {N}" so the UI shows something
+        // sensible right away. Numbering is per-type, in id order.
+        val grouped = _ownedVehicles.values
+            .filter { it.customName.isBlank() }
+            .groupBy { it.type }
+        if (grouped.isEmpty()) return
+        for ((type, instances) in grouped) {
+            val sorted = instances.sortedBy { it.id }
+            sorted.forEachIndexed { idx, owned ->
+                val name = "${type.displayName} ${idx + 1}"
+                _ownedVehicles[owned.id] = owned.copy(customName = name)
+                db.vehicles().updateName(owned.id, name)
+            }
+        }
         bump()
     }
 
@@ -317,12 +376,15 @@ class TransportService private constructor(appContext: Context) {
             val stacks = rows.mapNotNull { it.toItemStackOrNull() }
             _inventories[location] = Inventory(stacks)
         }
-        // Vehicles + per-vehicle paint color
+        // Vehicle instances
         db.vehicles().getAll().forEach { entity ->
-            runCatching { VehicleType.valueOf(entity.vehicle) }.getOrNull()?.let { vt ->
-                _vehiclesOwned += vt
-                _vehicleColors[vt] = entity.colorArgb
-            }
+            val type = runCatching { VehicleType.valueOf(entity.vehicle) }.getOrNull() ?: return@forEach
+            _ownedVehicles[entity.id] = OwnedVehicle(
+                id = entity.id,
+                type = type,
+                customName = entity.customName,
+                colorArgb = entity.colorArgb,
+            )
         }
         // Trips
         db.trips().getAll().forEach { row ->
@@ -375,7 +437,8 @@ class TransportService private constructor(appContext: Context) {
         }
         return TransportTripEntity(
             id = id,
-            vehicle = vehicle.name,
+            vehicle = vehicleType.name,
+            vehicleId = vehicleId,
             origin = origin.name,
             destination = destination.name,
             cargoJson = cargoJson.toString(),
@@ -406,7 +469,8 @@ class TransportService private constructor(appContext: Context) {
         }
         return Trip(
             id = id,
-            vehicle = veh,
+            vehicleId = vehicleId,
+            vehicleType = veh,
             origin = orig,
             destination = dest,
             cargo = cargo,

@@ -12,8 +12,8 @@ import androidx.compose.foundation.layout.height
 import androidx.compose.foundation.layout.padding
 import androidx.compose.foundation.layout.size
 import androidx.compose.foundation.rememberScrollState
-import androidx.compose.foundation.shape.CircleShape
 import androidx.compose.foundation.shape.RoundedCornerShape
+import androidx.compose.foundation.text.KeyboardOptions
 import androidx.compose.foundation.verticalScroll
 import androidx.compose.material.icons.Icons
 import androidx.compose.material.icons.automirrored.filled.ArrowBack
@@ -28,6 +28,7 @@ import androidx.compose.material3.Icon
 import androidx.compose.material3.IconButton
 import androidx.compose.material3.MaterialTheme
 import androidx.compose.material3.OutlinedButton
+import androidx.compose.material3.OutlinedTextField
 import androidx.compose.material3.Scaffold
 import androidx.compose.material3.Slider
 import androidx.compose.material3.SliderDefaults
@@ -50,10 +51,12 @@ import androidx.compose.ui.graphics.Color
 import androidx.compose.ui.graphics.toArgb
 import androidx.compose.ui.platform.LocalContext
 import androidx.compose.ui.text.font.FontWeight
+import androidx.compose.ui.text.input.ImeAction
 import androidx.compose.ui.text.style.TextAlign
 import androidx.compose.ui.unit.dp
 import androidx.compose.ui.unit.sp
 import com.shadaeiou.charmingfarmer.data.FarmGame
+import com.shadaeiou.charmingfarmer.data.OwnedVehicle
 import com.shadaeiou.charmingfarmer.data.TransportService
 import com.shadaeiou.charmingfarmer.data.VehicleType
 import com.shadaeiou.charmingfarmer.data.room.VehicleOwnedEntity
@@ -85,7 +88,7 @@ fun GarageScreen(onBack: () -> Unit, onOpenMap: () -> Unit) {
     val state = game.state
     val owned = transport.vehiclesOwned()
     var pendingBuy by remember { mutableStateOf<VehicleType?>(null) }
-    var pendingEdit by remember { mutableStateOf<VehicleType?>(null) }
+    var pendingEdit by remember { mutableStateOf<OwnedVehicle?>(null) }
 
     Scaffold(
         topBar = {
@@ -145,23 +148,21 @@ fun GarageScreen(onBack: () -> Unit, onOpenMap: () -> Unit) {
                     if (owned.isEmpty()) {
                         Text("No vehicles owned.", color = MaterialTheme.colorScheme.onSurfaceVariant)
                     } else {
-                        VehicleType.entries.filter { it in owned }.forEach { v ->
-                            val color = Color(transport.colorOf(v))
-                            val available = transport.vehicleAvailable(v, System.currentTimeMillis())
+                        owned.forEach { ov ->
+                            val available = transport.vehicleAvailable(ov.id, System.currentTimeMillis())
                             OwnedVehicleRow(
-                                vehicle = v,
-                                color = color,
+                                vehicle = ov,
                                 inUse = !available,
-                                onEdit = { pendingEdit = v },
+                                onEdit = { pendingEdit = ov },
                                 onSell = {
-                                    val payout = transport.sellVehicle(v, System.currentTimeMillis())
+                                    val payout = transport.sellVehicle(ov.id, System.currentTimeMillis())
                                     if (payout == null) {
-                                        feedback = "Can't sell ${v.displayName} (in transit?)"
+                                        feedback = "Can't sell ${ov.displayName} (in transit or last wheelbarrow?)"
                                         feedbackBad = true
                                     } else {
                                         game.addCoins(payout)
                                         game.save()
-                                        feedback = "Sold ${v.displayName} for 🪙$payout"
+                                        feedback = "Sold ${ov.displayName} for 🪙$payout"
                                         feedbackBad = false
                                     }
                                 },
@@ -173,28 +174,23 @@ fun GarageScreen(onBack: () -> Unit, onOpenMap: () -> Unit) {
 
                 Spacer(Modifier.height(12.dp))
 
-                GarageSection("🏷️ Available to buy") {
-                    val forSale = VehicleType.entries.filter { it !in owned && it.unlockCost > 0 }
-                    if (forSale.isEmpty()) {
-                        Text(
-                            "You own every available vehicle. Quite the fleet!",
-                            color = MaterialTheme.colorScheme.onSurfaceVariant,
+                GarageSection("🏷️ Buy more vehicles") {
+                    // Every type is buyable any number of times now.
+                    val forSale = VehicleType.entries.filter { it.unlockCost > 0 || it == VehicleType.WHEELBARROW }
+                    forSale.forEach { v ->
+                        BuyVehicleRow(
+                            vehicle = v,
+                            ownedCount = owned.count { it.type == v },
+                            canAfford = state.coins >= v.unlockCost,
+                            onBuy = { pendingBuy = v },
                         )
-                    } else {
-                        forSale.forEach { v ->
-                            BuyVehicleRow(
-                                vehicle = v,
-                                canAfford = state.coins >= v.unlockCost,
-                                onBuy = { pendingBuy = v },
-                            )
-                            Spacer(Modifier.height(6.dp))
-                        }
+                        Spacer(Modifier.height(6.dp))
                     }
                 }
 
                 Spacer(Modifier.height(8.dp))
                 Text(
-                    "Selling a vehicle returns 50% of its purchase price. Vehicles already in transit can't be sold.",
+                    "Selling a vehicle returns 50% of its purchase price. Your last Wheelbarrow stays put. Vehicles in transit can't be sold or repainted.",
                     style = MaterialTheme.typography.labelSmall,
                     color = Color(0xFF999999),
                     textAlign = TextAlign.Center,
@@ -205,35 +201,40 @@ fun GarageScreen(onBack: () -> Unit, onOpenMap: () -> Unit) {
     }
 
     pendingBuy?.let { v ->
-        ColorPickerDialog(
-            title = "Buy ${v.emoji} ${v.displayName}",
-            subtitle = "Capacity ${v.capacityKg}kg · 🪙${v.unlockCost}",
+        VehicleSetupDialog(
+            title = "Buy ${v.displayName}",
+            subtitle = "${v.capacityLbs} lbs · 🪙${v.unlockCost}",
+            initialName = transport.defaultNameFor(v),
             initialColor = VehicleOwnedEntity.DEFAULT_VEHICLE_COLOR,
+            previewType = v,
             confirmLabel = if (state.coins >= v.unlockCost) "Buy 🪙${v.unlockCost}" else "Not enough coins",
             confirmEnabled = state.coins >= v.unlockCost,
             onCancel = { pendingBuy = null },
-            onConfirm = { argb ->
+            onConfirm = { name, argb ->
                 game.addCoins(-v.unlockCost)
-                transport.unlockVehicle(v, argb)
+                transport.unlockVehicle(v, name, argb)
                 game.save()
-                feedback = "Bought ${v.displayName}!"
+                feedback = "Bought $name!"
                 feedbackBad = false
                 pendingBuy = null
             },
         )
     }
 
-    pendingEdit?.let { v ->
-        ColorPickerDialog(
-            title = "Repaint ${v.emoji} ${v.displayName}",
-            subtitle = "Pick a new color for your ${v.displayName.lowercase()}",
-            initialColor = transport.colorOf(v),
-            confirmLabel = "Save color",
+    pendingEdit?.let { ov ->
+        VehicleSetupDialog(
+            title = "Edit ${ov.displayName}",
+            subtitle = "${ov.type.capacityLbs} lbs · ${ov.type.displayName}",
+            initialName = ov.displayName,
+            initialColor = ov.colorArgb,
+            previewType = ov.type,
+            confirmLabel = "Save",
             confirmEnabled = true,
             onCancel = { pendingEdit = null },
-            onConfirm = { argb ->
-                transport.setColor(v, argb)
-                feedback = "Repainted ${v.displayName}"
+            onConfirm = { name, argb ->
+                transport.renameVehicle(ov.id, name)
+                transport.setColor(ov.id, argb)
+                feedback = "Updated $name"
                 feedbackBad = false
                 pendingEdit = null
             },
@@ -258,8 +259,7 @@ private fun GarageSection(title: String, content: @Composable () -> Unit) {
 
 @Composable
 private fun OwnedVehicleRow(
-    vehicle: VehicleType,
-    color: Color,
+    vehicle: OwnedVehicle,
     inUse: Boolean,
     onEdit: () -> Unit,
     onSell: () -> Unit,
@@ -271,13 +271,11 @@ private fun OwnedVehicleRow(
         verticalAlignment = Alignment.CenterVertically,
         horizontalArrangement = Arrangement.spacedBy(8.dp),
     ) {
-        Box(
-            modifier = Modifier
-                .size(28.dp)
-                .clip(CircleShape)
-                .background(color),
-            contentAlignment = Alignment.Center,
-        ) { Text(vehicle.emoji, fontSize = 14.sp) }
+        VehicleIcon(
+            vehicle = vehicle.type,
+            tint = Color(vehicle.colorArgb),
+            modifier = Modifier.size(44.dp),
+        )
         Column(Modifier.weight(1f)) {
             Text(
                 vehicle.displayName,
@@ -285,25 +283,28 @@ private fun OwnedVehicleRow(
                 fontWeight = FontWeight.Bold,
             )
             Text(
-                if (inUse) "In transit · ${vehicle.capacityKg}kg"
-                else "Idle · ${vehicle.capacityKg}kg",
+                if (inUse) "In transit · ${vehicle.type.capacityLbs} lbs"
+                else "Idle · ${vehicle.type.capacityLbs} lbs",
                 style = MaterialTheme.typography.labelSmall,
                 color = if (inUse) MaterialTheme.colorScheme.tertiary
                     else MaterialTheme.colorScheme.onSurfaceVariant,
             )
         }
-        OutlinedButton(onClick = onEdit) { Text("Paint") }
-        if (vehicle != VehicleType.WHEELBARROW) {
-            OutlinedButton(
-                onClick = onSell,
-                enabled = !inUse,
-            ) { Text("Sell 🪙${vehicle.unlockCost / 2}") }
-        }
+        OutlinedButton(onClick = onEdit, enabled = !inUse) { Text("Edit") }
+        OutlinedButton(
+            onClick = onSell,
+            enabled = !inUse,
+        ) { Text("🪙${vehicle.type.unlockCost / 2}") }
     }
 }
 
 @Composable
-private fun BuyVehicleRow(vehicle: VehicleType, canAfford: Boolean, onBuy: () -> Unit) {
+private fun BuyVehicleRow(
+    vehicle: VehicleType,
+    ownedCount: Int,
+    canAfford: Boolean,
+    onBuy: () -> Unit,
+) {
     Row(
         modifier = Modifier
             .fillMaxWidth()
@@ -311,15 +312,19 @@ private fun BuyVehicleRow(vehicle: VehicleType, canAfford: Boolean, onBuy: () ->
         verticalAlignment = Alignment.CenterVertically,
         horizontalArrangement = Arrangement.spacedBy(8.dp),
     ) {
-        Text(vehicle.emoji, fontSize = 22.sp)
+        VehicleIcon(
+            vehicle = vehicle,
+            tint = Color(VehicleOwnedEntity.DEFAULT_VEHICLE_COLOR),
+            modifier = Modifier.size(40.dp),
+        )
         Column(Modifier.weight(1f)) {
             Text(
-                vehicle.displayName,
+                vehicle.displayName + (if (ownedCount > 0) "  (own $ownedCount)" else ""),
                 style = MaterialTheme.typography.bodyMedium,
                 fontWeight = FontWeight.Bold,
             )
             Text(
-                "${vehicle.capacityKg}kg · ${vehicle.tripDurationMs / 60_000}min/trip",
+                "${vehicle.capacityLbs} lbs · ${vehicle.tripDurationMs / 60_000}min/trip",
                 style = MaterialTheme.typography.labelSmall,
                 color = MaterialTheme.colorScheme.onSurfaceVariant,
             )
@@ -342,20 +347,23 @@ private fun BuyVehicleRow(vehicle: VehicleType, canAfford: Boolean, onBuy: () ->
 }
 
 /**
- * RGB color-picker dialog. Three sliders (0-255) with a live swatch
- * preview. Used for both buying a new vehicle (initial paint) and
- * repainting an existing one.
+ * Combined name + RGB color picker dialog. Used for both the buy flow
+ * (initial setup) and the edit flow (rename + repaint). Live preview
+ * shows the pixel-art icon retinted as the player slides RGB.
  */
 @Composable
-private fun ColorPickerDialog(
+private fun VehicleSetupDialog(
     title: String,
     subtitle: String,
+    initialName: String,
     initialColor: Int,
+    previewType: VehicleType,
     confirmLabel: String,
     confirmEnabled: Boolean,
     onCancel: () -> Unit,
-    onConfirm: (Int) -> Unit,
+    onConfirm: (name: String, argb: Int) -> Unit,
 ) {
+    var name by remember { mutableStateOf(initialName) }
     val initial = Color(initialColor)
     var r by remember { mutableStateOf((initial.red * 255).toInt().toFloat()) }
     var g by remember { mutableStateOf((initial.green * 255).toInt().toFloat()) }
@@ -372,23 +380,42 @@ private fun ColorPickerDialog(
         title = { Text(title, fontWeight = FontWeight.Bold) },
         text = {
             Column {
-                Text(subtitle, style = MaterialTheme.typography.bodySmall, color = MaterialTheme.colorScheme.onSurfaceVariant)
+                Text(
+                    subtitle,
+                    style = MaterialTheme.typography.bodySmall,
+                    color = MaterialTheme.colorScheme.onSurfaceVariant,
+                )
+                Spacer(Modifier.height(8.dp))
+                OutlinedTextField(
+                    value = name,
+                    onValueChange = { name = it.take(40) },
+                    label = { Text("Name") },
+                    singleLine = true,
+                    keyboardOptions = KeyboardOptions(imeAction = ImeAction.Done),
+                    modifier = Modifier.fillMaxWidth(),
+                )
                 Spacer(Modifier.height(12.dp))
                 Box(
                     modifier = Modifier
                         .fillMaxWidth()
-                        .height(56.dp)
+                        .height(72.dp)
                         .clip(RoundedCornerShape(8.dp))
-                        .background(swatch),
+                        .background(Color(0xFF222222)),
                     contentAlignment = Alignment.Center,
                 ) {
-                    Text(
-                        "RGB(${r.toInt()}, ${g.toInt()}, ${b.toInt()})",
-                        color = Color.White,
-                        fontWeight = FontWeight.Bold,
+                    VehicleIcon(
+                        vehicle = previewType,
+                        tint = swatch,
+                        modifier = Modifier.size(64.dp),
                     )
                 }
-                Spacer(Modifier.height(12.dp))
+                Spacer(Modifier.height(10.dp))
+                Text(
+                    "RGB(${r.toInt()}, ${g.toInt()}, ${b.toInt()})",
+                    style = MaterialTheme.typography.labelMedium,
+                    fontWeight = FontWeight.Bold,
+                )
+                Spacer(Modifier.height(4.dp))
                 ChannelSlider("R", r, Color(0xFFE53935)) { r = it }
                 ChannelSlider("G", g, Color(0xFF43A047)) { g = it }
                 ChannelSlider("B", b, Color(0xFF1E88E5)) { b = it }
@@ -396,7 +423,7 @@ private fun ColorPickerDialog(
         },
         confirmButton = {
             TextButton(
-                onClick = { onConfirm(swatch.toArgb()) },
+                onClick = { onConfirm(name.trim(), swatch.toArgb()) },
                 enabled = confirmEnabled,
             ) { Text(confirmLabel) }
         },
