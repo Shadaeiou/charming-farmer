@@ -8,6 +8,18 @@ data class ReleaseNote(
 
 val CHANGELOG: List<ReleaseNote> = listOf(
     ReleaseNote(
+        version = "0.1.54",
+        date = "2026-05-08",
+        bullets = listOf(
+            "🚚 Transport panel rebuilt around custom-loading one vehicle for one destination — pick the vehicle, pick the destination, build the cargo manifest, ship",
+            "Mixed cargo: every vehicle can now carry several different item types in the same trip, capped by total weight (Wheelbarrow 5kg → Box Truck 800kg)",
+            "Vehicle picker shows your whole fleet with its custom paint color; in-transit vehicles are dimmed so you can't double-book",
+            "Faster quantity controls per cargo row: −, +1, +10, +100, ½ (load half your stock with one tap), Max (fill until stock or capacity runs out)",
+            "Live capacity bar shows loaded / total kg and turns gold once the truck is full",
+            "Multi-stop routes are coming next — the underlying trip model already supports mixed cargo so the new screen will compose cleanly",
+        ),
+    ),
+    ReleaseNote(
         version = "0.1.53",
         date = "2026-05-08",
         bullets = listOf(

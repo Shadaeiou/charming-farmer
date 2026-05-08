@@ -176,10 +176,39 @@ class TransportService private constructor(appContext: Context) {
         amount: Int,
         vehicle: VehicleType,
         nowMs: Long,
+    ): Trip? = shipMultiple(from, to, mapOf(type to amount), vehicle, nowMs)
+
+    /**
+     * Multi-item dispatch: load several different ItemTypes into one
+     * [vehicle], all bound for [to]. Cargo map keys are the item types,
+     * values are unit counts (1kg per unit). Returns null if the
+     * vehicle is busy, the total quantity exceeds capacity, or any item
+     * has fewer units in stock than requested.
+     *
+     * Future-ready: a multi-stop route variant will accept a list of
+     * (destination, cargo) pairs and build the trip the same way.
+     */
+    fun shipMultiple(
+        from: Location,
+        to: Location,
+        cargo: Map<ItemType, Int>,
+        vehicle: VehicleType,
+        nowMs: Long,
     ): Trip? {
         if (!vehicleAvailable(vehicle, nowMs)) return null
-        if (amount <= 0 || amount > vehicle.capacityKg) return null
-        val (afterRemove, pulled) = inventoryAt(from).remove(type, amount) ?: return null
+        val cleaned = cargo.filterValues { it > 0 }
+        if (cleaned.isEmpty()) return null
+        val total = cleaned.values.sum()
+        if (total > vehicle.capacityKg) return null
+
+        var inventory = inventoryAt(from)
+        val pulled = mutableListOf<ItemStack>()
+        for ((type, amount) in cleaned) {
+            val (after, taken) = inventory.remove(type, amount) ?: return null
+            inventory = after
+            pulled += taken
+        }
+
         val tripId = nextTripId++
         val trip = Trip(
             id = tripId,
@@ -190,14 +219,12 @@ class TransportService private constructor(appContext: Context) {
             startMs = nowMs,
             durationMs = vehicle.tripDurationMs,
         )
-        // Origin inventory + active trips list + next-id counter all go
-        // in one transaction so a half-ship can't strand cargo nowhere.
         db.runInTransaction {
-            db.inventory().replaceForLocation(from.name, afterRemove.toEntities(from))
+            db.inventory().replaceForLocation(from.name, inventory.toEntities(from))
             db.trips().insert(trip.toEntity())
             db.systemMeta().put(SystemMetaKeys.NEXT_TRIP_ID, nextTripId.toString())
         }
-        _inventories[from] = afterRemove
+        _inventories[from] = inventory
         activeTrips += trip
         bump()
         return trip

@@ -13,9 +13,11 @@ import androidx.compose.foundation.layout.fillMaxWidth
 import androidx.compose.foundation.layout.height
 import androidx.compose.foundation.layout.heightIn
 import androidx.compose.foundation.layout.padding
-import androidx.compose.foundation.lazy.LazyColumn
+import androidx.compose.foundation.lazy.LazyRow
 import androidx.compose.foundation.lazy.items
+import androidx.compose.foundation.rememberScrollState
 import androidx.compose.foundation.shape.RoundedCornerShape
+import androidx.compose.foundation.verticalScroll
 import androidx.compose.material3.AlertDialog
 import androidx.compose.material3.Button
 import androidx.compose.material3.ButtonDefaults
@@ -30,18 +32,20 @@ import androidx.compose.runtime.Composable
 import androidx.compose.runtime.LaunchedEffect
 import androidx.compose.runtime.getValue
 import androidx.compose.runtime.mutableLongStateOf
+import androidx.compose.runtime.mutableStateMapOf
 import androidx.compose.runtime.mutableStateOf
 import androidx.compose.runtime.remember
 import androidx.compose.runtime.setValue
 import androidx.compose.ui.Alignment
 import androidx.compose.ui.Modifier
+import androidx.compose.ui.draw.alpha
 import androidx.compose.ui.draw.clip
 import androidx.compose.ui.graphics.Color
 import androidx.compose.ui.text.font.FontWeight
 import androidx.compose.ui.unit.dp
 import androidx.compose.ui.unit.sp
 import com.shadaeiou.charmingfarmer.data.ItemGrade
-import com.shadaeiou.charmingfarmer.data.ItemStack
+import com.shadaeiou.charmingfarmer.data.ItemType
 import com.shadaeiou.charmingfarmer.data.Location
 import com.shadaeiou.charmingfarmer.data.TransportService
 import com.shadaeiou.charmingfarmer.data.Trip
@@ -49,11 +53,19 @@ import com.shadaeiou.charmingfarmer.data.VehicleType
 import kotlinx.coroutines.delay
 
 /**
- * Reusable transport dialog. Shows:
- *   - Active trips with progress bars
- *   - Origin inventory grouped by item type
- *   - One row per item with destination buttons; tapping ships 1 unit
- *     using the smallest available vehicle that fits.
+ * Custom-load a single vehicle for a single destination, with mixed
+ * cargo. Flow:
+ *   1. Pick a vehicle from your idle fleet (in-transit are dimmed).
+ *   2. Pick a destination — only ones that accept at least one item
+ *      from your inventory are listed.
+ *   3. Load up to capacity. Each cargo row has fast quantity controls:
+ *      ±1, +10, +100, ½ (load half your stock), Max (fill until either
+ *      stock or remaining capacity runs out).
+ *   4. Ship. The vehicle goes on a trip carrying everything you loaded.
+ *
+ * Multi-stop routes are a planned follow-up — the model already
+ * supports mixed cargo per trip, so a Route -> List<Stop> structure
+ * can layer on top without changing this panel's UX.
  */
 @Composable
 fun TransportPanel(
@@ -76,198 +88,369 @@ fun TransportPanel(
     val origInv = transport.inventoryAt(origin)
     val grouped = origInv.stacks.groupBy { it.type }
     val activeTrips = transport.activeTrips.toList()
-    @Suppress("UNUSED_EXPRESSION") transport.revisionTick // recompose on changes
+    @Suppress("UNUSED_EXPRESSION") transport.revisionTick
+
+    val ownedVehicles = VehicleType.entries.filter { it in transport.vehiclesOwned() }
+    var selectedVehicle by remember(ownedVehicles.size) {
+        mutableStateOf(
+            ownedVehicles.firstOrNull { transport.vehicleAvailable(it, System.currentTimeMillis()) }
+                ?: ownedVehicles.firstOrNull()
+        )
+    }
+    var selectedDestination by remember(allowedDestinations) {
+        mutableStateOf(allowedDestinations.firstOrNull())
+    }
+    val cargoLoad = remember { mutableStateMapOf<ItemType, Int>() }
+
+    // Reset cargo if vehicle/destination changes (item filters or
+    // capacity might shrink and the previous load could be invalid).
+    LaunchedEffect(selectedVehicle, selectedDestination) { cargoLoad.clear() }
+
+    val capacity = selectedVehicle?.capacityKg ?: 0
+    val loadedTotal = cargoLoad.values.sum()
+    val remainingCap = (capacity - loadedTotal).coerceAtLeast(0)
 
     AlertDialog(
         onDismissRequest = onDismiss,
-        confirmButton = {
-            TextButton(onClick = onDismiss) { Text("Close") }
-        },
+        confirmButton = { TextButton(onClick = onDismiss) { Text("Close") } },
         title = {
-            Text("🚚 Ship from ${origin.emoji} ${origin.displayName}", fontWeight = FontWeight.Bold)
+            Text(
+                "🚚 Ship from ${origin.emoji} ${origin.displayName}",
+                fontWeight = FontWeight.Bold,
+            )
         },
         text = {
             Column(
                 modifier = Modifier
                     .fillMaxWidth()
-                    .heightIn(max = 480.dp),
+                    .heightIn(max = 560.dp)
+                    .verticalScroll(rememberScrollState()),
             ) {
                 if (activeTrips.isNotEmpty()) {
-                    Text(
-                        "🚚 In transit",
-                        style = MaterialTheme.typography.labelMedium,
-                        color = MaterialTheme.colorScheme.onSurfaceVariant,
-                    )
-                    Spacer(Modifier.height(4.dp))
+                    SectionLabel("In transit")
                     activeTrips.forEach { trip ->
                         TripCard(trip, nowMs)
                         Spacer(Modifier.height(4.dp))
                     }
                     Spacer(Modifier.height(8.dp))
                 }
-                Text(
-                    "Available cargo",
-                    style = MaterialTheme.typography.labelMedium,
-                    color = MaterialTheme.colorScheme.onSurfaceVariant,
-                )
-                Spacer(Modifier.height(4.dp))
-                if (grouped.isEmpty()) {
+
+                SectionLabel("Pick a vehicle")
+                if (ownedVehicles.isEmpty()) {
                     Text(
-                        "Nothing to ship from here.",
-                        style = MaterialTheme.typography.bodyMedium,
-                        modifier = Modifier.padding(vertical = 8.dp),
+                        "No vehicles owned. Buy one in the Garage.",
+                        style = MaterialTheme.typography.bodySmall,
                     )
+                } else {
+                    LazyRow(horizontalArrangement = Arrangement.spacedBy(6.dp)) {
+                        items(ownedVehicles, key = { it.name }) { v ->
+                            val available = transport.vehicleAvailable(v, nowMs)
+                            VehicleChip(
+                                vehicle = v,
+                                tint = Color(transport.colorOf(v)),
+                                selected = v == selectedVehicle,
+                                disabled = !available,
+                                onTap = { if (available) selectedVehicle = v },
+                            )
+                        }
+                    }
                 }
-                LazyColumn(
-                    modifier = Modifier.fillMaxWidth().heightIn(max = 320.dp),
-                    contentPadding = PaddingValues(vertical = 4.dp),
-                    verticalArrangement = Arrangement.spacedBy(6.dp),
-                ) {
-                    items(grouped.entries.toList(), key = { it.key.name }) { (type, stacks) ->
-                        val totalQty = stacks.sumOf { it.quantity }
-                        val avgScore = stacks.sumOf { it.score.toLong() * it.quantity } /
-                            totalQty.coerceAtLeast(1)
-                        var qty by remember(type) { mutableStateOf(1) }
-                        // Cap qty by available stock and the largest owned vehicle.
-                        val maxVehicleCap = transport.vehiclesOwned().maxOfOrNull { it.capacityKg } ?: 1
-                        val maxAllowed = totalQty.coerceAtMost(maxVehicleCap).coerceAtLeast(1)
-                        if (qty > maxAllowed) qty = maxAllowed
-                        Column(
-                            modifier = Modifier
-                                .fillMaxWidth()
-                                .clip(RoundedCornerShape(8.dp))
-                                .background(MaterialTheme.colorScheme.surfaceVariant.copy(alpha = 0.4f))
-                                .padding(8.dp),
-                        ) {
-                            Row(verticalAlignment = Alignment.CenterVertically) {
-                                Text(type.emoji, fontSize = 18.sp)
-                                Spacer(Modifier.padding(end = 6.dp))
-                                Text(
-                                    "${type.displayName} × $totalQty",
-                                    style = MaterialTheme.typography.bodyMedium,
-                                    fontWeight = FontWeight.Bold,
-                                    modifier = Modifier.weight(1f),
-                                )
-                                val grade = ItemGrade.fromScore(avgScore.toInt())
-                                Text(
-                                    "Grade ${grade.display}",
-                                    style = MaterialTheme.typography.labelSmall,
-                                    color = Color(grade.color),
-                                    fontWeight = FontWeight.Bold,
+
+                Spacer(Modifier.height(8.dp))
+
+                SectionLabel("Destination")
+                LazyRow(horizontalArrangement = Arrangement.spacedBy(6.dp)) {
+                    items(allowedDestinations, key = { it.name }) { dest ->
+                        DestinationChip(
+                            location = dest,
+                            selected = dest == selectedDestination,
+                            onTap = { selectedDestination = dest },
+                        )
+                    }
+                }
+
+                Spacer(Modifier.height(10.dp))
+
+                val veh = selectedVehicle
+                val dest = selectedDestination
+                if (veh != null && dest != null) {
+                    Row(verticalAlignment = Alignment.CenterVertically) {
+                        Text(
+                            "Cargo manifest",
+                            style = MaterialTheme.typography.labelMedium,
+                            color = MaterialTheme.colorScheme.onSurfaceVariant,
+                            fontWeight = FontWeight.Bold,
+                        )
+                        Spacer(Modifier.weight(1f))
+                        Text(
+                            "$loadedTotal / ${veh.capacityKg} kg",
+                            style = MaterialTheme.typography.labelMedium,
+                            fontWeight = FontWeight.Bold,
+                            color = if (loadedTotal >= veh.capacityKg)
+                                MaterialTheme.colorScheme.tertiary
+                            else MaterialTheme.colorScheme.onSurface,
+                        )
+                    }
+                    Spacer(Modifier.height(4.dp))
+                    val frac = (loadedTotal.toFloat() / veh.capacityKg.coerceAtLeast(1))
+                        .coerceIn(0f, 1f)
+                    LinearProgressIndicator(
+                        progress = { frac },
+                        modifier = Modifier
+                            .fillMaxWidth()
+                            .height(5.dp)
+                            .clip(RoundedCornerShape(3.dp)),
+                        color = MaterialTheme.colorScheme.primary,
+                        trackColor = MaterialTheme.colorScheme.surfaceVariant,
+                    )
+                    Spacer(Modifier.height(8.dp))
+
+                    val acceptable = grouped.filterKeys { dest.accepts(it) }
+                    if (acceptable.isEmpty()) {
+                        Text(
+                            "Nothing here can be sent to ${dest.displayName}.",
+                            style = MaterialTheme.typography.bodySmall,
+                            color = MaterialTheme.colorScheme.onSurfaceVariant,
+                            modifier = Modifier.padding(vertical = 8.dp),
+                        )
+                    } else {
+                        Column(verticalArrangement = Arrangement.spacedBy(6.dp)) {
+                            acceptable.forEach { (type, stacks) ->
+                                val available = stacks.sumOf { it.quantity }
+                                val avgScore = stacks.sumOf { it.score.toLong() * it.quantity } /
+                                    available.coerceAtLeast(1)
+                                val loaded = cargoLoad[type] ?: 0
+                                CargoRow(
+                                    type = type,
+                                    loaded = loaded,
+                                    available = available,
+                                    avgScore = avgScore.toInt(),
+                                    remainingCapacity = remainingCap,
+                                    onChange = { newQty ->
+                                        val capped = newQty
+                                            .coerceAtLeast(0)
+                                            .coerceAtMost(available)
+                                            .coerceAtMost(loaded + remainingCap)
+                                        if (capped == 0) cargoLoad.remove(type)
+                                        else cargoLoad[type] = capped
+                                    },
                                 )
                             }
-                            Spacer(Modifier.height(6.dp))
-                            // Quantity stepper: -, count badge, +, max.
-                            Row(
-                                verticalAlignment = Alignment.CenterVertically,
-                                horizontalArrangement = Arrangement.spacedBy(6.dp),
+                        }
+
+                        Spacer(Modifier.height(10.dp))
+                        Row(horizontalArrangement = Arrangement.spacedBy(6.dp)) {
+                            OutlinedButton(
+                                onClick = { cargoLoad.clear() },
+                                enabled = cargoLoad.isNotEmpty(),
+                                modifier = Modifier.weight(1f),
+                            ) { Text("Clear") }
+                            Button(
+                                onClick = {
+                                    val trip = transport.shipMultiple(
+                                        from = origin,
+                                        to = dest,
+                                        cargo = cargoLoad.toMap(),
+                                        vehicle = veh,
+                                        nowMs = System.currentTimeMillis(),
+                                    )
+                                    if (trip == null) {
+                                        feedback = "Couldn't dispatch — recheck vehicle / capacity"
+                                        feedbackBad = true
+                                    } else {
+                                        feedback =
+                                            "🚚 Sent ${trip.cargo.sumOf { it.quantity }} items → ${dest.displayName}"
+                                        feedbackBad = false
+                                        cargoLoad.clear()
+                                    }
+                                },
+                                enabled = loadedTotal > 0 &&
+                                    transport.vehicleAvailable(veh, nowMs),
+                                modifier = Modifier.weight(2f),
+                                colors = ButtonDefaults.buttonColors(
+                                    containerColor = MaterialTheme.colorScheme.primary,
+                                ),
                             ) {
                                 Text(
-                                    "Qty:",
-                                    style = MaterialTheme.typography.labelMedium,
-                                    color = MaterialTheme.colorScheme.onSurfaceVariant,
-                                )
-                                OutlinedButton(
-                                    onClick = { qty = (qty - 1).coerceAtLeast(1) },
-                                    enabled = qty > 1,
-                                    contentPadding = PaddingValues(horizontal = 10.dp, vertical = 4.dp),
-                                ) { Text("−") }
-                                Text(
-                                    "$qty",
-                                    style = MaterialTheme.typography.bodyMedium,
+                                    "Ship $loadedTotal → ${dest.emoji}",
                                     fontWeight = FontWeight.Bold,
-                                    modifier = Modifier
-                                        .clip(RoundedCornerShape(6.dp))
-                                        .background(MaterialTheme.colorScheme.surface)
-                                        .padding(horizontal = 12.dp, vertical = 6.dp),
                                 )
-                                OutlinedButton(
-                                    onClick = { qty = (qty + 1).coerceAtMost(maxAllowed) },
-                                    enabled = qty < maxAllowed,
-                                    contentPadding = PaddingValues(horizontal = 10.dp, vertical = 4.dp),
-                                ) { Text("+") }
-                                TextButton(
-                                    onClick = { qty = maxAllowed },
-                                    enabled = qty < maxAllowed,
-                                ) { Text("Max ($maxAllowed)") }
-                            }
-                            Spacer(Modifier.height(6.dp))
-                            // Filter destinations to only those that accept this
-                            // item — no shipping hops to the malthouse.
-                            val acceptedDestinations = allowedDestinations.filter { it.accepts(type) }
-                            if (acceptedDestinations.isEmpty()) {
-                                Text(
-                                    "Nowhere to send this from here.",
-                                    style = MaterialTheme.typography.labelSmall,
-                                    color = MaterialTheme.colorScheme.onSurfaceVariant,
-                                )
-                            } else {
-                                Column(verticalArrangement = Arrangement.spacedBy(4.dp)) {
-                                    acceptedDestinations.forEach { dest ->
-                                        Button(
-                                            onClick = {
-                                                val veh = pickVehicle(transport, qty, nowMs)
-                                                if (veh == null) {
-                                                    feedback = "No idle vehicle big enough for $qty"
-                                                    feedbackBad = true
-                                                    return@Button
-                                                }
-                                                val trip = transport.ship(
-                                                    from = origin,
-                                                    to = dest,
-                                                    type = type,
-                                                    amount = qty,
-                                                    vehicle = veh,
-                                                    nowMs = System.currentTimeMillis(),
-                                                )
-                                                if (trip == null) {
-                                                    feedback = "Couldn't ship that"
-                                                    feedbackBad = true
-                                                } else {
-                                                    feedback = "Sent $qty ${type.displayName} → ${dest.displayName} (${veh.emoji})"
-                                                    feedbackBad = false
-                                                }
-                                            },
-                                            modifier = Modifier.fillMaxWidth(),
-                                            contentPadding = PaddingValues(horizontal = 12.dp, vertical = 8.dp),
-                                            colors = ButtonDefaults.buttonColors(
-                                                containerColor = MaterialTheme.colorScheme.primary,
-                                            ),
-                                        ) {
-                                            Text(
-                                                "Send $qty → ${dest.emoji}  ${dest.displayName}",
-                                                style = MaterialTheme.typography.bodyMedium,
-                                                fontWeight = FontWeight.Bold,
-                                            )
-                                        }
-                                    }
-                                }
                             }
                         }
                     }
                 }
-                Spacer(Modifier.height(8.dp))
-                feedback?.let {
+
+                feedback?.let { msg ->
+                    Spacer(Modifier.height(6.dp))
                     Text(
-                        text = it,
-                        modifier = Modifier.fillMaxWidth().padding(vertical = 4.dp),
+                        text = msg,
                         style = MaterialTheme.typography.labelMedium,
                         color = if (feedbackBad) MaterialTheme.colorScheme.error
                             else MaterialTheme.colorScheme.primary,
                     )
                 }
-                val vehicles = transport.vehiclesOwned()
-                if (vehicles.isNotEmpty()) {
-                    Text(
-                        "Fleet: " + vehicles.joinToString { "${it.emoji} ${it.displayName}" },
-                        style = MaterialTheme.typography.labelSmall,
-                        color = MaterialTheme.colorScheme.onSurfaceVariant,
-                        modifier = Modifier.padding(top = 4.dp),
-                    )
-                }
             }
         },
     )
+}
+
+@Composable
+private fun SectionLabel(text: String) {
+    Text(
+        text,
+        style = MaterialTheme.typography.labelMedium,
+        color = MaterialTheme.colorScheme.onSurfaceVariant,
+        fontWeight = FontWeight.Bold,
+        modifier = Modifier.padding(bottom = 4.dp),
+    )
+}
+
+@Composable
+private fun VehicleChip(
+    vehicle: VehicleType,
+    tint: Color,
+    selected: Boolean,
+    disabled: Boolean,
+    onTap: () -> Unit,
+) {
+    val bg = when {
+        selected -> tint.copy(alpha = 0.55f)
+        else -> MaterialTheme.colorScheme.surfaceVariant.copy(alpha = 0.7f)
+    }
+    val border = if (selected) MaterialTheme.colorScheme.primary else Color.Transparent
+    Column(
+        horizontalAlignment = Alignment.CenterHorizontally,
+        modifier = Modifier
+            .clip(RoundedCornerShape(8.dp))
+            .background(bg)
+            .border(2.dp, border, RoundedCornerShape(8.dp))
+            .alpha(if (disabled) 0.45f else 1f)
+            .clickable(enabled = !disabled) { onTap() }
+            .padding(horizontal = 10.dp, vertical = 6.dp),
+    ) {
+        Text(vehicle.emoji, fontSize = 22.sp)
+        Text(
+            vehicle.displayName,
+            style = MaterialTheme.typography.labelSmall,
+            fontWeight = FontWeight.Bold,
+        )
+        Text(
+            "${vehicle.capacityKg}kg",
+            style = MaterialTheme.typography.labelSmall,
+            color = MaterialTheme.colorScheme.onSurfaceVariant,
+        )
+        if (disabled) {
+            Text(
+                "in transit",
+                style = MaterialTheme.typography.labelSmall,
+                color = MaterialTheme.colorScheme.tertiary,
+            )
+        }
+    }
+}
+
+@Composable
+private fun DestinationChip(
+    location: Location,
+    selected: Boolean,
+    onTap: () -> Unit,
+) {
+    val bg = if (selected) MaterialTheme.colorScheme.primaryContainer
+        else MaterialTheme.colorScheme.surfaceVariant.copy(alpha = 0.7f)
+    val border = if (selected) MaterialTheme.colorScheme.primary else Color.Transparent
+    Row(
+        verticalAlignment = Alignment.CenterVertically,
+        modifier = Modifier
+            .clip(RoundedCornerShape(8.dp))
+            .background(bg)
+            .border(2.dp, border, RoundedCornerShape(8.dp))
+            .clickable(onClick = onTap)
+            .padding(horizontal = 10.dp, vertical = 8.dp),
+    ) {
+        Text(location.emoji, fontSize = 14.sp)
+        Spacer(Modifier.padding(end = 4.dp))
+        Text(
+            location.displayName,
+            style = MaterialTheme.typography.labelMedium,
+            fontWeight = FontWeight.Bold,
+        )
+    }
+}
+
+@Composable
+private fun CargoRow(
+    type: ItemType,
+    loaded: Int,
+    available: Int,
+    avgScore: Int,
+    remainingCapacity: Int,
+    onChange: (Int) -> Unit,
+) {
+    val grade = ItemGrade.fromScore(avgScore)
+    val canAddMore = remainingCapacity > 0 && loaded < available
+    val canRemove = loaded > 0
+    Column(
+        modifier = Modifier
+            .fillMaxWidth()
+            .clip(RoundedCornerShape(8.dp))
+            .background(MaterialTheme.colorScheme.surfaceVariant.copy(alpha = 0.45f))
+            .padding(8.dp),
+    ) {
+        Row(verticalAlignment = Alignment.CenterVertically) {
+            Text(type.emoji, fontSize = 18.sp)
+            Spacer(Modifier.padding(end = 6.dp))
+            Column(Modifier.weight(1f)) {
+                Text(
+                    type.displayName,
+                    style = MaterialTheme.typography.bodyMedium,
+                    fontWeight = FontWeight.Bold,
+                )
+                Text(
+                    "Avg grade ${grade.display} · stock $available",
+                    style = MaterialTheme.typography.labelSmall,
+                    color = Color(grade.color),
+                )
+            }
+            Box(
+                modifier = Modifier
+                    .clip(RoundedCornerShape(6.dp))
+                    .background(
+                        if (loaded > 0) MaterialTheme.colorScheme.primary.copy(alpha = 0.18f)
+                        else Color.Transparent
+                    )
+                    .padding(horizontal = 8.dp, vertical = 4.dp),
+            ) {
+                Text(
+                    "Loaded $loaded",
+                    style = MaterialTheme.typography.labelMedium,
+                    fontWeight = FontWeight.Bold,
+                    color = if (loaded > 0) MaterialTheme.colorScheme.primary
+                        else MaterialTheme.colorScheme.onSurfaceVariant,
+                )
+            }
+        }
+        Spacer(Modifier.height(6.dp))
+        Row(horizontalArrangement = Arrangement.spacedBy(4.dp)) {
+            QuickStep("−", canRemove) { onChange(loaded - 1) }
+            QuickStep("+1", canAddMore) { onChange(loaded + 1) }
+            QuickStep("+10", canAddMore) { onChange(loaded + 10) }
+            QuickStep("+100", canAddMore) { onChange(loaded + 100) }
+            QuickStep("½", available >= 2) { onChange(available / 2) }
+            QuickStep("Max", canAddMore) { onChange(loaded + remainingCapacity) }
+        }
+    }
+}
+
+@Composable
+private fun QuickStep(label: String, enabled: Boolean, onClick: () -> Unit) {
+    OutlinedButton(
+        onClick = onClick,
+        enabled = enabled,
+        contentPadding = PaddingValues(horizontal = 6.dp, vertical = 0.dp),
+        modifier = Modifier.heightIn(min = 30.dp),
+    ) {
+        Text(label, fontSize = 11.sp, fontWeight = FontWeight.Bold)
+    }
 }
 
 @Composable
@@ -310,15 +493,4 @@ private fun TripCard(trip: Trip, nowMs: Long) {
             )
         }
     }
-}
-
-private fun pickVehicle(
-    transport: TransportService,
-    requiredCapacity: Int,
-    nowMs: Long,
-): VehicleType? {
-    return transport.vehiclesOwned()
-        .filter { it.capacityKg >= requiredCapacity }
-        .filter { transport.vehicleAvailable(it, nowMs) }
-        .minByOrNull { it.tripDurationMs }
 }
