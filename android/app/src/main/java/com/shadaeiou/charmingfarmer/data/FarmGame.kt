@@ -38,6 +38,12 @@ enum class Season(val displayName: String, val emoji: String) {
             return ((elapsed % CYCLE_MS).toFloat() / CYCLE_MS).coerceIn(0f, 1f)
         }
 
+        /** Milliseconds remaining until the current season flips to the next one. */
+        fun msUntilNext(epochMs: Long, nowMs: Long): Long {
+            val elapsed = (nowMs - epochMs).coerceAtLeast(0L)
+            return SEASON_MS - (elapsed % SEASON_MS)
+        }
+
         /** How many seasons back from [current] until we hit a season in [plantSeasons]. */
         fun seasonsSinceLastPlantable(current: Season, plantSeasons: Set<Season>): Int {
             if (current in plantSeasons) return 0
@@ -47,6 +53,9 @@ enum class Season(val displayName: String, val emoji: String) {
             }
             return 4
         }
+
+        /** The season that follows [current] in the cycle. */
+        fun next(current: Season): Season = ORDER[(ORDER.indexOf(current) + 1) % 4]
     }
 }
 
@@ -287,6 +296,10 @@ class FarmGame(context: Context) {
 
     fun seasonCycleProgress(nowMs: Long = System.currentTimeMillis()): Float =
         Season.cycleProgress(seasonEpochMs, nowMs)
+
+    /** Milliseconds until the season changes to [Season.next]. */
+    fun msUntilNextSeason(nowMs: Long = System.currentTimeMillis()): Long =
+        Season.msUntilNext(seasonEpochMs, nowMs)
 
     fun tick(nowMs: Long = System.currentTimeMillis()) {
         val s = state

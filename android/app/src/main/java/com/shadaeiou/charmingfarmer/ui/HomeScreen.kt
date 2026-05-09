@@ -1,5 +1,6 @@
 package com.shadaeiou.charmingfarmer.ui
 
+import android.widget.Toast
 import androidx.compose.animation.core.animateFloat
 import androidx.compose.animation.core.animateFloatAsState
 import androidx.compose.animation.core.infiniteRepeatable
@@ -12,6 +13,7 @@ import androidx.compose.foundation.border
 import androidx.compose.foundation.clickable
 import androidx.compose.foundation.gestures.awaitEachGesture
 import androidx.compose.foundation.gestures.awaitFirstDown
+import androidx.compose.foundation.gestures.detectTapGestures
 import androidx.compose.foundation.gestures.waitForUpOrCancellation
 import androidx.compose.foundation.horizontalScroll
 import androidx.compose.foundation.layout.Arrangement
@@ -171,7 +173,16 @@ fun HomeScreen(onOpenSettings: () -> Unit, onOpenMap: () -> Unit) {
                     .padding(padding)
                     .padding(horizontal = 12.dp, vertical = 8.dp),
             ) {
-                StatCards(state, seasonCycleProgress)
+                StatCards(
+                    s = state,
+                    cycleProgress = seasonCycleProgress,
+                    onLongPressClock = {
+                        val remainMs = game.msUntilNextSeason(System.currentTimeMillis())
+                        val nextSeason = Season.next(currentSeason)
+                        val msg = "Next: ${nextSeason.emoji} ${nextSeason.displayName} in ${formatRemaining(remainMs)}"
+                        Toast.makeText(ctx, msg, Toast.LENGTH_SHORT).show()
+                    },
+                )
                 Spacer(Modifier.height(4.dp))
                 SeasonBanner(currentSeason)
                 Spacer(Modifier.height(2.dp))
@@ -192,8 +203,13 @@ fun HomeScreen(onOpenSettings: () -> Unit, onOpenMap: () -> Unit) {
     }
 }
 
+private fun formatRemaining(ms: Long): String {
+    val secs = (ms / 1000L).coerceAtLeast(0L)
+    return if (secs < 60L) "${secs}s" else "${secs / 60L}m ${secs % 60L}s"
+}
+
 @Composable
-private fun StatCards(s: FarmState, cycleProgress: Float) {
+private fun StatCards(s: FarmState, cycleProgress: Float, onLongPressClock: () -> Unit) {
     Row(
         Modifier.fillMaxWidth().height(IntrinsicSize.Min),
         horizontalArrangement = Arrangement.spacedBy(8.dp),
@@ -250,9 +266,15 @@ private fun StatCards(s: FarmState, cycleProgress: Float) {
                 )
             }
         }
-        // Season clock — third card, square, fills the same height as the other two
+        // Season clock — third card, square, fills the same height as the other two.
+        // Long-press to see how long until the season changes.
         Card(
-            modifier = Modifier.width(72.dp).fillMaxHeight(),
+            modifier = Modifier
+                .width(72.dp)
+                .fillMaxHeight()
+                .pointerInput(Unit) {
+                    detectTapGestures(onLongPress = { onLongPressClock() })
+                },
             colors = CardDefaults.cardColors(containerColor = MaterialTheme.colorScheme.surface),
             elevation = CardDefaults.cardElevation(defaultElevation = 2.dp),
         ) {
