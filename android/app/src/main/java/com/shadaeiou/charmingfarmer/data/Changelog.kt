@@ -8,6 +8,14 @@ data class ReleaseNote(
 
 val CHANGELOG: List<ReleaseNote> = listOf(
     ReleaseNote(
+        version = "0.1.60",
+        date = "2026-05-09",
+        bullets = listOf(
+            "⏳ Season-clock readout is now an inline tooltip docked right below the clock (instead of a system toast at the bottom of the screen) — appears the moment you long-press and disappears the instant you let go",
+            "Tooltip text updates live while held, so the countdown ticks down second-by-second",
+        ),
+    ),
+    ReleaseNote(
         version = "0.1.59",
         date = "2026-05-09",
         bullets = listOf(

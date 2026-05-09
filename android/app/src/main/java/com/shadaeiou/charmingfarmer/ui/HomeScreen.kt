@@ -1,6 +1,5 @@
 package com.shadaeiou.charmingfarmer.ui
 
-import android.widget.Toast
 import androidx.compose.animation.core.animateFloat
 import androidx.compose.animation.core.animateFloatAsState
 import androidx.compose.animation.core.infiniteRepeatable
@@ -13,7 +12,6 @@ import androidx.compose.foundation.border
 import androidx.compose.foundation.clickable
 import androidx.compose.foundation.gestures.awaitEachGesture
 import androidx.compose.foundation.gestures.awaitFirstDown
-import androidx.compose.foundation.gestures.detectTapGestures
 import androidx.compose.foundation.gestures.waitForUpOrCancellation
 import androidx.compose.foundation.horizontalScroll
 import androidx.compose.foundation.layout.Arrangement
@@ -113,6 +111,7 @@ fun HomeScreen(onOpenSettings: () -> Unit, onOpenMap: () -> Unit) {
     var nowMs by remember { mutableLongStateOf(System.currentTimeMillis()) }
     var currentSeason by remember { mutableStateOf(game.currentSeason()) }
     var seasonCycleProgress by remember { mutableFloatStateOf(game.seasonCycleProgress()) }
+    var msUntilNextSeason by remember { mutableLongStateOf(game.msUntilNextSeason()) }
     var transportOpen by remember { mutableStateOf(false) }
 
     LaunchedEffect(Unit) {
@@ -122,6 +121,7 @@ fun HomeScreen(onOpenSettings: () -> Unit, onOpenMap: () -> Unit) {
             nowMs = System.currentTimeMillis()
             currentSeason = game.currentSeason(nowMs)
             seasonCycleProgress = game.seasonCycleProgress(nowMs)
+            msUntilNextSeason = game.msUntilNextSeason(nowMs)
             delay(250)
         }
     }
@@ -176,12 +176,8 @@ fun HomeScreen(onOpenSettings: () -> Unit, onOpenMap: () -> Unit) {
                 StatCards(
                     s = state,
                     cycleProgress = seasonCycleProgress,
-                    onLongPressClock = {
-                        val remainMs = game.msUntilNextSeason(System.currentTimeMillis())
-                        val nextSeason = Season.next(currentSeason)
-                        val msg = "Next: ${nextSeason.emoji} ${nextSeason.displayName} in ${formatRemaining(remainMs)}"
-                        Toast.makeText(ctx, msg, Toast.LENGTH_SHORT).show()
-                    },
+                    currentSeason = currentSeason,
+                    msUntilNextSeason = msUntilNextSeason,
                 )
                 Spacer(Modifier.height(4.dp))
                 SeasonBanner(currentSeason)
@@ -209,7 +205,12 @@ private fun formatRemaining(ms: Long): String {
 }
 
 @Composable
-private fun StatCards(s: FarmState, cycleProgress: Float, onLongPressClock: () -> Unit) {
+private fun StatCards(
+    s: FarmState,
+    cycleProgress: Float,
+    currentSeason: Season,
+    msUntilNextSeason: Long,
+) {
     Row(
         Modifier.fillMaxWidth().height(IntrinsicSize.Min),
         horizontalArrangement = Arrangement.spacedBy(8.dp),
@@ -267,19 +268,38 @@ private fun StatCards(s: FarmState, cycleProgress: Float, onLongPressClock: () -
             }
         }
         // Season clock — third card, square, fills the same height as the other two.
-        // Long-press to see how long until the season changes.
-        Card(
-            modifier = Modifier
-                .width(72.dp)
-                .fillMaxHeight()
-                .pointerInput(Unit) {
-                    detectTapGestures(onLongPress = { onLongPressClock() })
-                },
-            colors = CardDefaults.cardColors(containerColor = MaterialTheme.colorScheme.surface),
-            elevation = CardDefaults.cardElevation(defaultElevation = 2.dp),
-        ) {
-            Box(Modifier.fillMaxSize().padding(8.dp)) {
-                SeasonClock(cycleProgress, Modifier.fillMaxSize())
+        // Long-press to see how long until the season changes; the tooltip
+        // sits right below the clock and disappears the moment you let go.
+        var showSeasonTooltip by remember { mutableStateOf(false) }
+        Box(modifier = Modifier.width(72.dp).fillMaxHeight()) {
+            Card(
+                modifier = Modifier
+                    .fillMaxSize()
+                    .pointerInput(Unit) {
+                        awaitEachGesture {
+                            awaitFirstDown(requireUnconsumed = false)
+                            val upBeforeTimeout = withTimeoutOrNull(viewConfiguration.longPressTimeoutMillis) {
+                                waitForUpOrCancellation()
+                            }
+                            if (upBeforeTimeout == null) {
+                                showSeasonTooltip = true
+                                waitForUpOrCancellation()
+                                showSeasonTooltip = false
+                            }
+                        }
+                    },
+                colors = CardDefaults.cardColors(containerColor = MaterialTheme.colorScheme.surface),
+                elevation = CardDefaults.cardElevation(defaultElevation = 2.dp),
+            ) {
+                Box(Modifier.fillMaxSize().padding(8.dp)) {
+                    SeasonClock(cycleProgress, Modifier.fillMaxSize())
+                }
+            }
+            if (showSeasonTooltip) {
+                val nextSeason = Season.next(currentSeason)
+                BelowAnchorTooltip(
+                    "Next: ${nextSeason.emoji} ${nextSeason.displayName} in ${formatRemaining(msUntilNextSeason)}"
+                )
             }
         }
     }
@@ -719,6 +739,45 @@ private fun SeedButton(
         }
         if (showTooltip) {
             AboveAnchorTooltip("${"%.1f".format(revenuePerMin)} coins/min")
+        }
+    }
+}
+
+@Composable
+private fun BelowAnchorTooltip(text: String) {
+    val density = LocalDensity.current
+    Popup(
+        popupPositionProvider = object : PopupPositionProvider {
+            override fun calculatePosition(
+                anchorBounds: IntRect,
+                windowSize: IntSize,
+                layoutDirection: LayoutDirection,
+                popupContentSize: IntSize,
+            ): IntOffset {
+                val gap = with(density) { 6.dp.roundToPx() }
+                val centeredX = anchorBounds.left + (anchorBounds.width - popupContentSize.width) / 2
+                val maxX = (windowSize.width - popupContentSize.width).coerceAtLeast(0)
+                val x = centeredX.coerceIn(0, maxX)
+                val belowY = anchorBounds.bottom + gap
+                val maxY = (windowSize.height - popupContentSize.height).coerceAtLeast(0)
+                val y = if (belowY <= maxY) belowY
+                    else (anchorBounds.top - popupContentSize.height - gap).coerceAtLeast(0)
+                return IntOffset(x, y)
+            }
+        },
+    ) {
+        Card(
+            elevation = CardDefaults.cardElevation(8.dp),
+            colors = CardDefaults.cardColors(containerColor = MaterialTheme.colorScheme.inverseSurface),
+            shape = RoundedCornerShape(8.dp),
+        ) {
+            Text(
+                text,
+                modifier = Modifier.padding(horizontal = 10.dp, vertical = 6.dp),
+                style = MaterialTheme.typography.labelLarge,
+                fontWeight = FontWeight.Bold,
+                color = MaterialTheme.colorScheme.inverseOnSurface,
+            )
         }
     }
 }
