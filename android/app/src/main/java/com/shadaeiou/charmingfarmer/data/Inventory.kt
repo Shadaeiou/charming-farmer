@@ -119,7 +119,10 @@ enum class ItemType(val displayName: String, val emoji: String) {
     BEER_STOUT("Dry Stout", "🍺"),
     BEER_HEFEWEIZEN("Hefeweizen", "🍺"),
 
-    // Cooked dishes (artisan goods produced at the kitchen)
+    // Cooked dishes (artisan goods produced at the kitchen).
+    // Older non-heat dishes (DISH_GARDEN_SALAD, DISH_PINEAPPLE_SALSA,
+    // DISH_WATERMELON_SORBET) stay in the enum so existing silo stacks
+    // load — their recipes were retired in v0.1.61.
     DISH_CARROT_SOUP("Carrot Soup", "🥣"),
     DISH_MASHED_POTATOES("Mashed Potatoes", "🥔"),
     DISH_GARDEN_SALAD("Garden Salad", "🥗"),
@@ -130,6 +133,41 @@ enum class ItemType(val displayName: String, val emoji: String) {
     DISH_PINEAPPLE_SALSA("Pineapple Salsa", "🌶️"),
     DISH_WATERMELON_SORBET("Watermelon Sorbet", "🍧"),
     DISH_TRUFFLE_RISOTTO("Truffle Risotto", "🍚"),
+    DISH_ROASTED_CARROTS("Roasted Carrots", "🥕"),
+    DISH_HASH_BROWNS("Hash Browns", "🥔"),
+    DISH_CARAMELIZED_ONIONS("Caramelized Onions", "🧅"),
+    DISH_GARLIC_BREAD("Garlic Bread", "🍞"),
+    DISH_MUSHROOM_RISOTTO("Mushroom Risotto", "🍚"),
+    DISH_TOMATO_SOUP("Tomato Soup", "🥣"),
+    DISH_THREE_BEAN_CHILI("Three-Bean Chili", "🌶️"),
+    DISH_CORNBREAD("Cornbread", "🍞"),
+    DISH_STEAMED_BROCCOLI("Steamed Broccoli", "🥦"),
+    DISH_ZUCCHINI_FRITTERS("Zucchini Fritters", "🥒"),
+    DISH_STRAWBERRY_CRISP("Strawberry Crisp", "🍓"),
+    DISH_BLUEBERRY_MUFFINS("Blueberry Muffins", "🧁"),
+    DISH_GRAPE_JELLY("Grape Jelly", "🍇"),
+    DISH_PUMPKIN_SOUP("Pumpkin Soup", "🎃"),
+    DISH_PEPPER_STIR_FRY("Pepper Stir-Fry", "🫑"),
+    DISH_PINEAPPLE_UPSIDE_DOWN_CAKE("Pineapple Upside-Down Cake", "🍰"),
+    DISH_GARLIC_CONFIT("Garlic Confit", "🧄"),
+    DISH_KIWI_TART("Kiwi Tart", "🥝"),
+    DISH_PEANUT_BRITTLE("Peanut Brittle", "🥜"),
+    DISH_HOT_SAUCE("Hot Sauce", "🌶️"),
+    DISH_SNAP_PEA_STIR_FRY("Snap Pea Stir-Fry", "🫛"),
+    DISH_SAFFRON_RICE("Saffron Rice", "🍚"),
+    DISH_VANILLA_CUSTARD("Vanilla Custard", "🍮"),
+    DISH_YAM_FRIES("Yam Fries", "🍠"),
+    DISH_TRUFFLE_MAC_AND_CHEESE("Truffle Mac & Cheese", "🧀"),
+    DISH_ONION_RINGS("Onion Rings", "🧅"),
+    DISH_STUFFED_MUSHROOMS("Stuffed Mushrooms", "🍄"),
+    DISH_PUMPKIN_SPICE_BREAD("Pumpkin Spice Bread", "🍞"),
+    DISH_VEGGIE_TEMPURA("Veggie Tempura", "🍤"),
+    DISH_VEGETABLE_LASAGNA("Vegetable Lasagna", "🍝"),
+    DISH_EGGPLANT_PARM("Eggplant Parmesan", "🍝"),
+    DISH_BLUEBERRY_PANCAKES("Blueberry Pancakes", "🥞"),
+    DISH_OATMEAL_COOKIES("Oatmeal Cookies", "🍪"),
+    DISH_POTATO_GRATIN("Potato Gratin", "🥘"),
+    DISH_CORN_CHOWDER("Corn Chowder", "🥣"),
 
     // Raw farm crops harvested into the silo. Naming mirrors CropType
     // so a producer can map CropType → ItemType by string suffix

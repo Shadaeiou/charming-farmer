@@ -139,6 +139,14 @@ fun harvestScore(watered: Boolean): Int {
 
 enum class PlotKind { GRASS, TILLED, PLANTED, TREE }
 
+/**
+ * Trees no longer die of "old age" — instead, the player has [TREE_DEATH_GRACE_MS]
+ * (24 real-time hours, 30 s under skipTimers) to harvest each ripe fruit before
+ * the tree dies of neglect. Once the timer trips on any unharvested ripe fruit,
+ * the whole tree dies and the plot reverts to grass on next tap.
+ */
+val TREE_DEATH_GRACE_MS: Long get() = if (DebugSettings.skipTimers) 30_000L else 24L * 60 * 60 * 1000L
+
 data class Plot(
     val kind: PlotKind = PlotKind.GRASS,
     val crop: CropType? = null,
@@ -156,8 +164,23 @@ data class Plot(
     }
     fun isReady(nowMs: Long): Boolean = growthFraction(nowMs) >= 1f
 
-    fun treeIsDead(nowMs: Long): Boolean =
-        tree != null && nowMs >= plantedAtMs + tree.lifeMs
+    /** Tree dies if a ripe fruit has been waiting too long for harvest. */
+    fun treeIsDead(nowMs: Long): Boolean {
+        if (tree == null) return false
+        if (treeWindowsDue(nowMs) <= harvestCount) return false
+        val readySinceMs = plantedAtMs + (harvestCount + 1) * tree.harvestIntervalMs
+        return nowMs - readySinceMs >= TREE_DEATH_GRACE_MS
+    }
+
+    /** Milliseconds until this tree dies from a missed harvest. Returns
+     *  Long.MAX_VALUE when there's no ripe fruit waiting (i.e. the tree
+     *  is fine indefinitely). */
+    fun treeMsUntilDeath(nowMs: Long): Long {
+        val t = tree ?: return Long.MAX_VALUE
+        if (treeWindowsDue(nowMs) <= harvestCount) return Long.MAX_VALUE
+        val readySinceMs = plantedAtMs + (harvestCount + 1) * t.harvestIntervalMs
+        return (readySinceMs + TREE_DEATH_GRACE_MS - nowMs).coerceAtLeast(0L)
+    }
 
     fun treeWindowsDue(nowMs: Long): Int {
         val t = tree ?: return 0
@@ -573,9 +596,9 @@ class FarmGame(context: Context) {
                 save()
             }
             else -> {
-                val allDone = p.treeWindowsDue(now) >= tree.maxHarvests
+                val allDone = p.harvestCount >= tree.maxHarvests
                 val msg = if (allDone) {
-                    "All harvests done. Dies in ${prettyMs(p.plantedAtMs + tree.lifeMs - now)}."
+                    "All ${tree.maxHarvests} harvests collected. ${tree.displayName} stays put."
                 } else {
                     "Next harvest in ${prettyMs(p.treeNextHarvestMs() - now)}."
                 }
