@@ -17,6 +17,7 @@ import androidx.compose.foundation.layout.padding
 import androidx.compose.foundation.layout.size
 import androidx.compose.foundation.shape.RoundedCornerShape
 import androidx.compose.material.icons.Icons
+import androidx.compose.material.icons.filled.LocalShipping
 import androidx.compose.material.icons.filled.Settings
 import androidx.compose.material3.ExperimentalMaterial3Api
 import androidx.compose.material3.Icon
@@ -51,7 +52,9 @@ import com.shadaeiou.charmingfarmer.data.Biome
 import com.shadaeiou.charmingfarmer.data.FarmGame
 import com.shadaeiou.charmingfarmer.data.LandService
 import com.shadaeiou.charmingfarmer.data.LandTile
+import com.shadaeiou.charmingfarmer.data.Location
 import com.shadaeiou.charmingfarmer.data.StructureType
+import com.shadaeiou.charmingfarmer.data.TransportService
 import com.shadaeiou.charmingfarmer.data.biomeAt
 import kotlinx.coroutines.delay
 
@@ -74,18 +77,40 @@ fun WorldMapScreen(
     val ctx = LocalContext.current
     val land = remember { LandService.get(ctx.applicationContext) }
     val game = remember { FarmGame(ctx.applicationContext) }
+    val transport = remember { TransportService.get(ctx.applicationContext) }
     var nowMs by remember { mutableLongStateOf(System.currentTimeMillis()) }
     var feedback by remember { mutableStateOf<String?>(null) }
+    var transportOpen by remember { mutableStateOf(false) }
 
     LaunchedEffect(Unit) {
         while (true) {
             game.tick()
             land.tick(System.currentTimeMillis())
+            transport.tick(System.currentTimeMillis())
             nowMs = System.currentTimeMillis()
             delay(500)
         }
     }
     DisposableEffect(Unit) { onDispose { game.save() } }
+
+    if (transportOpen) {
+        // Map is the world hub, so open transport with the FARM silo as the
+        // default origin — that's where most cargo lives. The destination
+        // list is everything reachable; Location.accepts() filters per
+        // item so the player only sees sensible routes.
+        TransportPanel(
+            transport = transport,
+            origin = Location.FARM,
+            allowedDestinations = listOf(
+                Location.MALTHOUSE,
+                Location.BREWERY,
+                Location.KITCHEN,
+                Location.MARKET,
+                Location.CELLAR,
+            ),
+            onDismiss = { transportOpen = false },
+        )
+    }
 
     // Subscribe to land service revisions for recomposition when tiles change.
     @Suppress("UNUSED_EXPRESSION") land.revisionTick
@@ -97,6 +122,9 @@ fun WorldMapScreen(
             TopAppBar(
                 title = { Text("🗺️  Your Land", fontWeight = FontWeight.Bold) },
                 actions = {
+                    IconButton(onClick = { transportOpen = true }) {
+                        Icon(Icons.Filled.LocalShipping, contentDescription = "Transport")
+                    }
                     IconButton(onClick = onOpenSettings) {
                         Icon(Icons.Filled.Settings, contentDescription = "Settings")
                     }

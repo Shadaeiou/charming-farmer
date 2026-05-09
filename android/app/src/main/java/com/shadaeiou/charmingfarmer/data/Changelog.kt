@@ -8,6 +8,14 @@ data class ReleaseNote(
 
 val CHANGELOG: List<ReleaseNote> = listOf(
     ReleaseNote(
+        version = "0.1.58",
+        date = "2026-05-08",
+        bullets = listOf(
+            "🚚 Transport button now lives on the world map's top bar, so you can dispatch shipments without first navigating to the Farm",
+            "Defaults to shipping from the Farm silo (where most cargo lives); destination filtering still kicks in per item so only sensible routes are offered",
+        ),
+    ),
+    ReleaseNote(
         version = "0.1.56",
         date = "2026-05-08",
         bullets = listOf(
