@@ -8,6 +8,20 @@ data class ReleaseNote(
 
 val CHANGELOG: List<ReleaseNote> = listOf(
     ReleaseNote(
+        version = "0.1.61",
+        date = "2026-05-09",
+        bullets = listOf(
+            "🌳 Trees no longer die of old age — instead, you have 24 real-time hours to harvest each ripe fruit before the tree dies of neglect. Take a few days off and your orchard sticks around as long as you keep up with picking",
+            "🍳 Kitchen overhaul! Every recipe now has a Prep step (chop, dice, knead, marinade, etc.) before cooking — prep takes 5–45 s, then heat finishes the dish",
+            "Cook times across the board cut roughly in half — Carrot Soup goes from 4m to 2m, Pumpkin Pie from 14m to 7m, etc.",
+            "Three appliances now: 🍳 Stove, 🔥 Oven, 🌬️ Air Fryer. Each holds one cook at a time, so you can run three different recipes at once across the appliances (one prep slot is shared)",
+            "30 brand-new heat-cooked recipes — Roasted Carrots, Hash Browns, Garlic Bread, Mushroom Risotto, Tomato Soup, Three-Bean Chili, Cornbread, Steamed Broccoli, Zucchini Fritters, Strawberry Crisp, Blueberry Muffins, Grape Jelly, Pumpkin Soup, Pepper Stir-Fry, Pineapple Upside-Down Cake, Garlic Confit, Kiwi Tart, Peanut Brittle, Hot Sauce, Snap Pea Stir-Fry, Saffron Rice, Vanilla Custard, Yam Fries, Truffle Mac & Cheese, Onion Rings, Stuffed Mushrooms, Pumpkin Spice Bread, Veggie Tempura, Vegetable Lasagna, Eggplant Parmesan, Blueberry Pancakes, Oatmeal Cookies, Potato Gratin, Corn Chowder",
+            "Garden Salad, Pineapple Salsa, and Watermelon Sorbet retired from the recipe book — they didn't need heat. (Existing dishes already in the silo still ship and sell normally.)",
+            "Recipe rows redesigned: cook time, energy, and coin cost share one row (\"⚡5 · 🪙1k · 🕒 7m\"); descriptions and the \"stored at the barn\" line are gone (everything goes to the barn)",
+            "Ingredient text turns red when your silo is short — quick visual flag for what to plant next",
+        ),
+    ),
+    ReleaseNote(
         version = "0.1.60",
         date = "2026-05-09",
         bullets = listOf(
