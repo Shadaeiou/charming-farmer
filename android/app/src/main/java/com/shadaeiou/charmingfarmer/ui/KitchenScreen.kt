@@ -50,8 +50,12 @@ import androidx.compose.ui.text.font.FontWeight
 import androidx.compose.ui.text.style.TextAlign
 import androidx.compose.ui.unit.dp
 import androidx.compose.ui.unit.sp
+import com.shadaeiou.charmingfarmer.data.Appliance
+import com.shadaeiou.charmingfarmer.data.CookStage
 import com.shadaeiou.charmingfarmer.data.CookingRun
 import com.shadaeiou.charmingfarmer.data.FarmGame
+import com.shadaeiou.charmingfarmer.data.Inventory
+import com.shadaeiou.charmingfarmer.data.ItemType
 import com.shadaeiou.charmingfarmer.data.Kitchen
 import com.shadaeiou.charmingfarmer.data.KitchenRecipe
 import com.shadaeiou.charmingfarmer.data.Location
@@ -80,12 +84,9 @@ fun KitchenScreen(onBack: () -> Unit, onOpenMap: () -> Unit) {
     DisposableEffect(Unit) { onDispose { game.save() } }
 
     @Suppress("UNUSED_EXPRESSION") kitchen.revisionTick
+    @Suppress("UNUSED_EXPRESSION") transport.revisionTick
 
     if (transportOpen) {
-        // Dishes deposit into the FARM silo when cooked, so we ship
-        // FROM Location.FARM with a filter that hides everything but
-        // dishes — keeps the kitchen-side panel focused on selling
-        // artisan goods.
         TransportPanel(
             transport = transport,
             origin = Location.FARM,
@@ -96,6 +97,7 @@ fun KitchenScreen(onBack: () -> Unit, onOpenMap: () -> Unit) {
     }
 
     val state = game.state
+    val farmInventory = transport.inventoryAt(Location.FARM)
 
     Scaffold(
         topBar = {
@@ -141,7 +143,7 @@ fun KitchenScreen(onBack: () -> Unit, onOpenMap: () -> Unit) {
                 Spacer(Modifier.height(8.dp))
 
                 Text(
-                    text = kitchen.feedback ?: "Pick a recipe — pay coins for ingredients, the dish lands in your barn when it's done.",
+                    text = kitchen.feedback ?: "Pick a recipe — chop, dice, knead, then cook on the right appliance.",
                     modifier = Modifier
                         .fillMaxWidth()
                         .clip(RoundedCornerShape(6.dp))
@@ -154,10 +156,10 @@ fun KitchenScreen(onBack: () -> Unit, onOpenMap: () -> Unit) {
                 )
                 Spacer(Modifier.height(8.dp))
 
-                KitchenSection("🔥 Cooking now (${kitchen.activeRuns.size}/${kitchen.tier.cookSlots})") {
+                KitchenSection("🍽️ In the kitchen") {
                     if (kitchen.activeRuns.isEmpty()) {
                         Text(
-                            "All burners cool. Start a recipe below.",
+                            "Idle. Pick a recipe to start prep.",
                             style = MaterialTheme.typography.bodySmall,
                             color = MaterialTheme.colorScheme.onSurfaceVariant,
                         )
@@ -181,13 +183,16 @@ fun KitchenScreen(onBack: () -> Unit, onOpenMap: () -> Unit) {
                     KitchenRecipe.entries.forEach { recipe ->
                         val needCoins = state.coins < recipe.ingredientCoinCost
                         val needEnergy = state.energy.toInt() < recipe.cookEnergy
-                        val noSlots = kitchen.availableSlots() == 0
-                        val canCook = !needCoins && !needEnergy && !noSlots
+                        val prepBusy = !kitchen.prepSlotFree()
+                        val applianceBusy = !kitchen.applianceFree(recipe.appliance)
+                        val canCook = !needCoins && !needEnergy && !prepBusy && !applianceBusy
                         RecipeRow(
                             recipe = recipe,
                             enabled = canCook,
                             shortCoins = needCoins,
                             shortEnergy = needEnergy,
+                            applianceBusy = applianceBusy,
+                            farmInventory = farmInventory,
                             onCook = {
                                 kitchen.startCooking(
                                     recipe = recipe,
@@ -231,15 +236,26 @@ private fun KitchenSection(title: String, content: @Composable () -> Unit) {
 private fun CookingRow(run: CookingRun, nowMs: Long) {
     val frac = run.progress(nowMs)
     val remainingS = (run.remainingMs(nowMs) / 1000).toInt()
+    val (stageEmoji, stageLabel, barColor) = when (run.stage) {
+        CookStage.PREP -> Triple(run.recipe.prepEmoji, "${run.recipe.prepLabel} (prep)", Color(0xFF8AB4F8))
+        CookStage.COOK -> Triple(run.recipe.appliance.emoji, "${run.recipe.appliance.displayName} (cook)", Color(0xFFFFB74D))
+    }
     Column(Modifier.fillMaxWidth()) {
         Row(verticalAlignment = Alignment.CenterVertically) {
             Text(run.recipe.outputType.emoji, fontSize = 18.sp)
             Spacer(Modifier.padding(end = 6.dp))
-            Text(
-                run.recipe.displayName,
-                style = MaterialTheme.typography.labelMedium,
-                modifier = Modifier.weight(1f),
-            )
+            Column(Modifier.weight(1f)) {
+                Text(
+                    run.recipe.displayName,
+                    style = MaterialTheme.typography.labelMedium,
+                    fontWeight = FontWeight.Bold,
+                )
+                Text(
+                    "$stageEmoji $stageLabel",
+                    style = MaterialTheme.typography.labelSmall,
+                    color = MaterialTheme.colorScheme.onSurfaceVariant,
+                )
+            }
             Text(
                 if (remainingS > 0) prettyTime(remainingS) else "plating",
                 style = MaterialTheme.typography.labelSmall,
@@ -250,7 +266,7 @@ private fun CookingRow(run: CookingRun, nowMs: Long) {
         LinearProgressIndicator(
             progress = { frac },
             modifier = Modifier.fillMaxWidth().height(4.dp).clip(RoundedCornerShape(2.dp)),
-            color = MaterialTheme.colorScheme.primary,
+            color = barColor,
             trackColor = MaterialTheme.colorScheme.surfaceVariant,
         )
     }
@@ -262,6 +278,8 @@ private fun RecipeRow(
     enabled: Boolean,
     shortCoins: Boolean,
     shortEnergy: Boolean,
+    applianceBusy: Boolean,
+    farmInventory: Inventory,
     onCook: () -> Unit,
 ) {
     val bg = if (enabled) MaterialTheme.colorScheme.primaryContainer
@@ -273,7 +291,7 @@ private fun RecipeRow(
     val errorColor = MaterialTheme.colorScheme.error
     val energyColor = if (shortEnergy) errorColor else labelColor
     val coinColor = if (shortCoins) errorColor else labelColor
-    val ingredientColor = if (shortCoins) errorColor else labelColor
+
     Column(
         modifier = Modifier
             .fillMaxWidth()
@@ -300,37 +318,54 @@ private fun RecipeRow(
                     color = energyColor,
                     fontWeight = if (shortEnergy) FontWeight.Bold else FontWeight.Normal,
                 )
-                Text(
-                    " · ",
-                    style = MaterialTheme.typography.labelSmall,
-                    color = labelColor,
-                )
+                Text(" · ", style = MaterialTheme.typography.labelSmall, color = labelColor)
                 Text(
                     "🪙${prettyCoins(recipe.ingredientCoinCost)}",
                     style = MaterialTheme.typography.labelSmall,
                     color = coinColor,
                     fontWeight = if (shortCoins) FontWeight.Bold else FontWeight.Normal,
                 )
+                Text(" · ", style = MaterialTheme.typography.labelSmall, color = labelColor)
+                Text(
+                    "🕒 ${prettyMinutes(recipe.totalDurationMs)}",
+                    style = MaterialTheme.typography.labelSmall,
+                    color = labelColor,
+                )
             }
         }
         Spacer(Modifier.height(4.dp))
-        Text(
-            recipe.description,
-            style = MaterialTheme.typography.labelSmall,
-            color = labelColor,
-        )
-        Spacer(Modifier.height(6.dp))
-        Text(
-            "Ingredients: " + recipe.ingredients.joinToString { "${it.quantity}× ${it.crop.emoji} ${it.crop.displayName}" },
-            style = MaterialTheme.typography.labelSmall,
-            fontWeight = FontWeight.Bold,
-            color = ingredientColor,
-        )
-        Text(
-            "Cooks in ${prettyMinutes(recipe.cookDurationMs)} → barn (artisan good)",
-            style = MaterialTheme.typography.labelSmall,
-            color = labelColor,
-        )
+        Row(verticalAlignment = Alignment.CenterVertically) {
+            Text(
+                "${recipe.prepEmoji} ${recipe.prepLabel}",
+                style = MaterialTheme.typography.labelSmall,
+                color = labelColor,
+            )
+            Text(" → ", style = MaterialTheme.typography.labelSmall, color = labelColor)
+            Text(
+                "${recipe.appliance.emoji} ${recipe.appliance.displayName}",
+                style = MaterialTheme.typography.labelSmall,
+                color = if (applianceBusy && !enabled) errorColor else labelColor,
+                fontWeight = if (applianceBusy && !enabled) FontWeight.Bold else FontWeight.Normal,
+            )
+        }
+        Spacer(Modifier.height(4.dp))
+        // One row per ingredient — text turns red when the player's
+        // FARM silo doesn't hold enough of that crop. Coins still pay
+        // for the recipe (Phase 1), but the red flag is a hint that
+        // the player should grow more.
+        Column {
+            recipe.ingredients.forEach { ing ->
+                val cropItem = ItemType.valueOfOrNull("CROP_${ing.crop.name}")
+                val onHand = if (cropItem != null) farmInventory.totalOf(cropItem) else 0
+                val outOfStock = onHand < ing.quantity
+                Text(
+                    "${ing.quantity}× ${ing.crop.emoji} ${ing.crop.displayName}  (have $onHand)",
+                    style = MaterialTheme.typography.labelSmall,
+                    fontWeight = if (outOfStock) FontWeight.Bold else FontWeight.Normal,
+                    color = if (outOfStock) errorColor else labelColor,
+                )
+            }
+        }
     }
 }
 
@@ -410,11 +445,9 @@ private fun KitchenBackground(modifier: Modifier = Modifier) {
         rect(0f, 0f, cols, floorTop, WallTile)
         for (row in 0 until floorTop.toInt() step 4) {
             for (col in 0 until cols.toInt() step 4) {
-                // Subtle shading inside each tile
                 rect(col + 0.4f, row + 0.4f, 3.2f, 1f, WallTileShadow)
             }
         }
-        // Grout lines
         for (row in 0..floorTop.toInt() step 4) {
             rect(0f, row.toFloat() - 0.2f, cols, 0.4f, WallGrout)
         }
@@ -422,7 +455,6 @@ private fun KitchenBackground(modifier: Modifier = Modifier) {
             rect(col.toFloat() - 0.2f, 0f, 0.4f, floorTop, WallGrout)
         }
 
-        // Floor — checkerboard tile
         rect(0f, floorTop, cols, rows - floorTop, FloorTileDark)
         val tile = 4f
         var rowI = 0
@@ -436,23 +468,18 @@ private fun KitchenBackground(modifier: Modifier = Modifier) {
             rowI += 1
             fy += tile
         }
-        // Skirting
         rect(0f, floorTop, cols, 0.6f, CabinetShadow)
 
-        // Wall cabinets running along the top above the counter
         rect(2f, 6f, 26f, 8f, CabinetWood)
         rect(2f, 6f, 26f, 0.6f, CabinetShadow)
         rect(2f, 13.4f, 26f, 0.6f, CabinetShadow)
-        // Cabinet doors (vertical splits)
         for (split in intArrayOf(8, 14, 20, 26)) {
             rect(split.toFloat() - 0.2f, 6f, 0.4f, 8f, CabinetShadow)
         }
-        // Cabinet handles
         for (cx in intArrayOf(5, 11, 17, 23)) {
             rect(cx.toFloat(), 12.5f, 1f, 0.5f, CabinetHandle)
         }
 
-        // Cabinets on the right above the fridge
         rect(46f, 6f, 16f, 6f, CabinetWood)
         rect(46f, 6f, 16f, 0.6f, CabinetShadow)
         rect(46f, 11.4f, 16f, 0.6f, CabinetShadow)
@@ -460,12 +487,10 @@ private fun KitchenBackground(modifier: Modifier = Modifier) {
             rect(split.toFloat() - 0.2f, 6f, 0.4f, 6f, CabinetShadow)
         }
 
-        // Counter top spans across stove + sink
         val counterY = 19f
         rect(2f, counterY, 42f, 2f, Counter)
         rect(2f, counterY, 42f, 0.4f, CabinetShadow)
         rect(2f, counterY + 1.6f, 42f, 0.4f, CounterEdge)
-        // Lower cabinet panels under the counter
         rect(2f, counterY + 2f, 42f, 7f, CabinetWood)
         for (split in intArrayOf(8, 14, 20, 26, 32, 38)) {
             rect(split.toFloat() - 0.2f, counterY + 2f, 0.4f, 7f, CabinetShadow)
@@ -474,62 +499,56 @@ private fun KitchenBackground(modifier: Modifier = Modifier) {
             rect(cx.toFloat(), counterY + 5f, 1f, 0.5f, CabinetHandle)
         }
 
-        // Stove + oven on the left half of the counter
         val stX = 4f
         val stY = counterY - 11f
-        // Hood (range hood) above the stove
         rect(stX, stY, 12f, 4f, StoveTrim)
         rect(stX + 1f, stY + 4f, 10f, 1f, Stove)
-        // Burners on top (recessed black square with hot ring)
         rect(stX, stY + 5f, 12f, 4f, Stove)
         rect(stX + 1f, stY + 6f, 4f, 2f, StoveBurner)
         rect(stX + 7f, stY + 6f, 4f, 2f, StoveBurner)
-        rect(stX + 2f, stY + 6.5f, 2f, 1f, StoveBurnerHot)  // one burner on
-        // Stove control panel
+        rect(stX + 2f, stY + 6.5f, 2f, 1f, StoveBurnerHot)
         rect(stX, stY + 9f, 12f, 1.5f, StoveTrim)
         for (dx in intArrayOf(2, 5, 8, 11)) {
             rect(stX + dx - 0.5f, stY + 9.4f, 0.7f, 0.7f, StoveDial)
         }
-        // Oven door beneath
         rect(stX, counterY + 2f, 12f, 7f, Stove)
         rect(stX + 1f, counterY + 3f, 10f, 4f, OvenWindow)
-        rect(stX + 2f, counterY + 4f, 8f, 2f, OvenGlow)  // warm glow inside
-        rect(stX + 1f, counterY + 7.5f, 10f, 0.6f, StoveTrim)  // oven handle bar
+        rect(stX + 2f, counterY + 4f, 8f, 2f, OvenGlow)
+        rect(stX + 1f, counterY + 7.5f, 10f, 0.6f, StoveTrim)
         rect(stX + 0.5f, counterY + 8.5f, 11f, 0.4f, StoveTrim)
 
-        // Sink in the middle of the counter
         val skX = 18f
         val skY = counterY - 0.2f
         rect(skX, skY, 12f, 2.4f, SinkRim)
         rect(skX + 1f, skY + 0.4f, 10f, 1.6f, SinkBasin)
         rect(skX + 1f, skY + 0.4f, 10f, 0.4f, SinkBasinShade)
-        // Faucet rising above the basin
         rect(skX + 5.5f, counterY - 5f, 1f, 4f, SinkFaucet)
         rect(skX + 5.5f, counterY - 5f, 4f, 0.7f, SinkFaucet)
         rect(skX + 9f, counterY - 4f, 0.6f, 2f, SinkFaucet)
         rect(skX + 4.5f, counterY - 5.6f, 3f, 0.7f, SinkFaucet)
 
-        // Cutting board / bowl on the counter (right of sink)
         rect(34f, counterY - 0.8f, 6f, 0.8f, CabinetWood)
         rect(35f, counterY - 1.5f, 4f, 0.7f, SinkBasin)
 
-        // Fridge on the right
+        // Air fryer on the counter, right of the cutting board
+        val afX = 41f
+        val afY = counterY - 4.5f
+        rect(afX, afY, 4.5f, 4.5f, Stove)
+        rect(afX + 0.5f, afY + 0.5f, 3.5f, 3f, OvenWindow)
+        rect(afX + 1f, afY + 1.2f, 2.5f, 1.6f, OvenGlow)
+        rect(afX + 0.5f, afY + 3.8f, 3.5f, 0.4f, StoveTrim)
+
         val frX = 48f
         val frY = counterY - 14f
         rect(frX, frY, 12f, 26f, FridgeShadow)
         rect(frX, frY, 11f, 26f, FridgeBody)
-        // Top freezer compartment seam
         rect(frX, frY + 7f, 11f, 0.5f, FridgeSeal)
-        // Door handles (vertical bars)
         rect(frX + 9f, frY + 1.5f, 0.6f, 4.5f, FridgeHandle)
         rect(frX + 9f, frY + 9f, 0.6f, 14f, FridgeHandle)
-        // Door seam
         rect(frX, frY, 0.4f, 26f, FridgeSeal)
-        // Magnets on the fridge
         rect(frX + 2f, frY + 10f, 1.2f, 1.2f, FridgeMagnet)
         rect(frX + 4.5f, frY + 12f, 1.2f, 1.2f, OvenGlow)
         rect(frX + 6.5f, frY + 10.5f, 1.2f, 1.2f, FramePaintGreen)
-        // Plant on top of fridge
         rect(frX + 4f, frY - 2.5f, 4f, 2.5f, CabinetWood)
         rect(frX + 3.5f, frY - 5f, 5f, 3f, FramePaintGreen)
         rect(frX + 5f, frY - 6f, 1f, 1.5f, FramePaintGreen)

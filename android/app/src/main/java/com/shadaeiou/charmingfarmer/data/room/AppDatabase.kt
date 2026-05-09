@@ -159,13 +159,20 @@ data class BrewBatchEntity(
 /**
  * One row per cooking session in flight at the kitchen. Recipe
  * references [KitchenRecipe] by name; the dish drops into the FARM
- * silo when the run completes. Schema added in v5.
+ * silo when the run completes. Schema added in v5; v10 adds [stage]
+ * (PREP / COOK) so the in-flight prep step survives kills.
+ *
+ * [startMs] is interpreted as the *current stage's* start time — when
+ * a run transitions PREP → COOK the column is rewritten to the cook
+ * start time. The stage label tells the engine which duration to
+ * compare against.
  */
 @Entity(tableName = "kitchen_runs")
 data class KitchenRunEntity(
     @PrimaryKey val id: Long,
     val recipe: String,
     @ColumnInfo(name = "start_ms") val startMs: Long,
+    @ColumnInfo(name = "stage", defaultValue = "COOK") val stage: String = "COOK",
 )
 
 /**
@@ -535,6 +542,17 @@ val MIGRATION_7_8: Migration = object : Migration(7, 8) {
     }
 }
 
+val MIGRATION_9_10: Migration = object : Migration(9, 10) {
+    override fun migrate(db: SupportSQLiteDatabase) {
+        // v0.1.61 splits cooking into PREP + COOK. Existing rows are
+        // already past prep (they came from the v0.1.60 single-stage
+        // model) so they default to COOK with their original start_ms.
+        db.execSQL(
+            "ALTER TABLE kitchen_runs ADD COLUMN stage TEXT NOT NULL DEFAULT 'COOK'"
+        )
+    }
+}
+
 val MIGRATION_8_9: Migration = object : Migration(8, 9) {
     override fun migrate(db: SupportSQLiteDatabase) {
         // Multi-instance vehicles: each owned vehicle now has its own
@@ -596,7 +614,7 @@ val MIGRATION_8_9: Migration = object : Migration(8, 9) {
         LandTileEntity::class,
         KitchenRunEntity::class,
     ],
-    version = 9,
+    version = 10,
     exportSchema = false,
 )
 abstract class AppDatabase : RoomDatabase() {
@@ -632,7 +650,7 @@ abstract class AppDatabase : RoomDatabase() {
             // a coroutine scope held on the FarmGame, but at our scale
             // this stays well under a frame.
             Room.databaseBuilder(appContext, AppDatabase::class.java, "charming-farmer.db")
-                .addMigrations(MIGRATION_1_2, MIGRATION_2_3, MIGRATION_3_4, MIGRATION_4_5, MIGRATION_5_6, MIGRATION_6_7, MIGRATION_7_8, MIGRATION_8_9)
+                .addMigrations(MIGRATION_1_2, MIGRATION_2_3, MIGRATION_3_4, MIGRATION_4_5, MIGRATION_5_6, MIGRATION_6_7, MIGRATION_7_8, MIGRATION_8_9, MIGRATION_9_10)
                 .allowMainThreadQueries()
                 .build()
     }
