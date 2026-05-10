@@ -8,6 +8,16 @@ data class ReleaseNote(
 
 val CHANGELOG: List<ReleaseNote> = listOf(
     ReleaseNote(
+        version = "0.1.64",
+        date = "2026-05-10",
+        bullets = listOf(
+            "🚚 Transport panel is now identical no matter which screen opens it — pick the source silo at the top of the dialog, then the destination, then load cargo. No more per-screen quirks (Kitchen-only filter, Brewery-only origin, etc.)",
+            "Source chips show how many items are stocked at each silo, so you can spot at a glance where there's stuff to ship",
+            "🍳 Kitchen recipes now sort cheapest-first and stay in that order even when a recipe is unaffordable (it just greys out instead of jumping)",
+            "Kitchen prep banner clears automatically once prep finishes, so you don't see \"🔪 Chop for Carrot Soup…\" lingering after the dish has moved to the stove",
+        ),
+    ),
+    ReleaseNote(
         version = "0.1.61",
         date = "2026-05-09",
         bullets = listOf(
