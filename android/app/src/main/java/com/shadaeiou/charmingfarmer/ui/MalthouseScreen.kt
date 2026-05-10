@@ -105,8 +105,6 @@ fun MalthouseScreen(onBack: () -> Unit, onOpenMap: () -> Unit) {
     if (transportOpen) {
         TransportPanel(
             transport = transport,
-            origin = Location.MALTHOUSE,
-            allowedDestinations = listOf(Location.BREWERY, Location.FARM),
             onDismiss = { transportOpen = false },
         )
     }
