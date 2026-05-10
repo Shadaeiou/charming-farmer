@@ -8,6 +8,13 @@ data class ReleaseNote(
 
 val CHANGELOG: List<ReleaseNote> = listOf(
     ReleaseNote(
+        version = "0.1.74",
+        date = "2026-05-10",
+        bullets = listOf(
+            "🚚 Transport panel no longer shows two \"Close\" buttons when nothing's loaded — just one. The other slot now stays empty until you've loaded something, at which point it turns into the Clear button.",
+        ),
+    ),
+    ReleaseNote(
         version = "0.1.64",
         date = "2026-05-10",
         bullets = listOf(

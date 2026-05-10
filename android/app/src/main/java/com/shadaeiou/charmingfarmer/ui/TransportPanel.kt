@@ -159,10 +159,11 @@ fun TransportPanel(
             }
         },
         dismissButton = {
+            // Only render when there's something to clear; otherwise the
+            // confirmButton's "Close" / "Ship" action is the single exit
+            // and we don't double up on a useless second Close.
             if (cargoLoad.isNotEmpty()) {
                 TextButton(onClick = { cargoLoad.clear() }) { Text("Clear") }
-            } else {
-                TextButton(onClick = onDismiss) { Text("Close") }
             }
         },
         title = {
