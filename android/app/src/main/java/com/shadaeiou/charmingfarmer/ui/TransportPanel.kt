@@ -57,21 +57,17 @@ import kotlinx.coroutines.delay
 /**
  * Custom-load a single vehicle for a single destination, with mixed
  * cargo. The Ship button is sticky at the bottom so it's always
- * reachable no matter how long the cargo list grows. Multi-stop routes
- * are a planned follow-up — the underlying [TransportService.shipMultiple]
- * already handles mixed cargo per trip.
+ * reachable no matter how long the cargo list grows.
  *
- * @param cargoFilter Optional predicate restricting which item types
- *   the panel shows. Kitchen passes `{ it.name.startsWith("DISH_") }` so
- *   players ship cooked dishes only when launching from the kitchen.
+ * The panel is identical no matter which screen it's opened from —
+ * the player picks both the origin silo and the destination from
+ * inside the dialog. Default origin is the first silo with any items
+ * (FARM if everything is empty).
  */
 @Composable
 fun TransportPanel(
     transport: TransportService,
-    origin: Location,
-    allowedDestinations: List<Location>,
     onDismiss: () -> Unit,
-    cargoFilter: (ItemType) -> Boolean = { true },
 ) {
     var nowMs by remember { mutableLongStateOf(System.currentTimeMillis()) }
     LaunchedEffect(Unit) {
@@ -84,12 +80,22 @@ fun TransportPanel(
     var feedback by remember { mutableStateOf<String?>(null) }
     var feedbackBad by remember { mutableStateOf(false) }
 
-    val origInv = transport.inventoryAt(origin)
-    val grouped = origInv.stacks
-        .filter { cargoFilter(it.type) }
-        .groupBy { it.type }
-    val activeTrips = transport.activeTrips.toList()
     @Suppress("UNUSED_EXPRESSION") transport.revisionTick
+
+    val sources = Location.entries.toList()
+    val initialSource = remember {
+        sources.firstOrNull { transport.inventoryAt(it).stacks.isNotEmpty() }
+            ?: Location.FARM
+    }
+    var selectedSource by remember { mutableStateOf(initialSource) }
+    val origInv = transport.inventoryAt(selectedSource)
+    val grouped = origInv.stacks.groupBy { it.type }
+    val activeTrips = transport.activeTrips.toList()
+
+    val destinations = sources.filter { it != selectedSource }
+    var selectedDestination by remember(selectedSource) {
+        mutableStateOf(destinations.firstOrNull())
+    }
 
     val ownedVehicles = transport.vehiclesOwned()
     var selectedVehicleId by remember(ownedVehicles.size) {
@@ -100,12 +106,9 @@ fun TransportPanel(
                 ?: ownedVehicles.firstOrNull()?.id
         )
     }
-    var selectedDestination by remember(allowedDestinations) {
-        mutableStateOf(allowedDestinations.firstOrNull())
-    }
     val cargoLoad = remember { mutableStateMapOf<ItemType, Int>() }
 
-    LaunchedEffect(selectedVehicleId, selectedDestination) { cargoLoad.clear() }
+    LaunchedEffect(selectedVehicleId, selectedDestination, selectedSource) { cargoLoad.clear() }
 
     val selectedVehicle = selectedVehicleId?.let { transport.vehicleById(it) }
     val capacity = selectedVehicle?.type?.capacityLbs ?: 0
@@ -125,7 +128,7 @@ fun TransportPanel(
                 Button(
                     onClick = {
                         val trip = transport.shipMultiple(
-                            from = origin,
+                            from = selectedSource,
                             to = dest,
                             cargo = cargoLoad.toMap(),
                             vehicleId = veh.id,
@@ -164,7 +167,7 @@ fun TransportPanel(
         },
         title = {
             Text(
-                "🚚 Ship from ${origin.emoji} ${origin.displayName}",
+                "🚚 Ship from ${selectedSource.emoji} ${selectedSource.displayName}",
                 fontWeight = FontWeight.Bold,
             )
         },
@@ -206,9 +209,24 @@ fun TransportPanel(
 
                 Spacer(Modifier.height(8.dp))
 
+                SectionLabel("Source")
+                LazyRow(horizontalArrangement = Arrangement.spacedBy(6.dp)) {
+                    items(sources, key = { it.name }) { src ->
+                        val stockCount = transport.inventoryAt(src).stacks.sumOf { it.quantity }
+                        DestinationChip(
+                            location = src,
+                            selected = src == selectedSource,
+                            stockCount = stockCount,
+                            onTap = { selectedSource = src },
+                        )
+                    }
+                }
+
+                Spacer(Modifier.height(8.dp))
+
                 SectionLabel("Destination")
                 LazyRow(horizontalArrangement = Arrangement.spacedBy(6.dp)) {
-                    items(allowedDestinations, key = { it.name }) { dest ->
+                    items(destinations, key = { it.name }) { dest ->
                         DestinationChip(
                             location = dest,
                             selected = dest == selectedDestination,
@@ -363,6 +381,7 @@ private fun DestinationChip(
     location: Location,
     selected: Boolean,
     onTap: () -> Unit,
+    stockCount: Int? = null,
 ) {
     val bg = if (selected) MaterialTheme.colorScheme.primaryContainer
         else MaterialTheme.colorScheme.surfaceVariant.copy(alpha = 0.7f)
@@ -383,6 +402,14 @@ private fun DestinationChip(
             style = MaterialTheme.typography.labelMedium,
             fontWeight = FontWeight.Bold,
         )
+        if (stockCount != null && stockCount > 0) {
+            Spacer(Modifier.padding(end = 4.dp))
+            Text(
+                "×$stockCount",
+                style = MaterialTheme.typography.labelSmall,
+                color = MaterialTheme.colorScheme.onSurfaceVariant,
+            )
+        }
     }
 }
 
