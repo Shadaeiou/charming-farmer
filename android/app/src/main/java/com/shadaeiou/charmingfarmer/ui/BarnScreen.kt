@@ -82,13 +82,6 @@ fun BarnScreen(onBack: () -> Unit, onOpenMap: () -> Unit) {
     if (transportOpen) {
         TransportPanel(
             transport = transport,
-            origin = Location.FARM,
-            allowedDestinations = listOf(
-                Location.MALTHOUSE,
-                Location.BREWERY,
-                Location.KITCHEN,
-                Location.MARKET,
-            ),
             onDismiss = { transportOpen = false },
         )
     }
