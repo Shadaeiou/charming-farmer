@@ -60,9 +60,22 @@ The property auto-generates a JVM `setFoo(Z)V` setter. A hand-written `fun setFo
 
 Game data + UI state + debug toggles all live in **Room** (`charming-farmer.db`). The only `SharedPreferences` reads remaining are inside `LegacyMigrator`, which is read-only. If you need a single key/value pair, add it to the `system_meta` table.
 
-### 6. Always commit and push directly to `main`
+### 6. Develop on a `claude/<topic>` branch and merge via PR
 
-The CI workflow only fires on push to `main` (or `v*` tags). Feature branches produce no APK and the user can't test them. **Never create a feature branch. Never open a PR.** Just push to main.
+The local git proxy refuses pushes to `main` but accepts pushes to branches prefixed with `claude/`. The flow is:
+
+1. `git checkout -b claude/<short-topic>` (one branch per change-set; deleted on merge so they don't accumulate)
+2. Edit, commit normally on the branch
+3. `git push -u origin claude/<topic>` — works through the local proxy
+4. Open a PR against `main` using `mcp__github__create_pull_request`
+5. Wait for CI to go green on the PR
+6. Merge with `mcp__github__merge_pull_request` using `merge_method: "squash"` and `delete_branch: true`
+
+Squash-merge keeps `versionName = "0.1.$gitCommits"` accurate — every shipped change is exactly one commit on `main`, so the changelog version label stays mechanical. The branch deletes itself on merge, so the repo stays clean.
+
+CI runs a debug-build verification on every PR (no signing keystore needed) and the full release-build + APK + FCM push on every push to `main` — only ever the squashed merge commits, so users only get notified about merged work, never per-PR-commit.
+
+**Never push directly to `main`** (the proxy will 403 anyway) and **never use a non-`claude/`-prefixed branch name** (the proxy will 403 those too).
 
 ### 7. Pre-commit checklist (5 seconds, save 5 minutes)
 
@@ -73,7 +86,7 @@ Run through this list before every `git commit`:
 - [ ] Did I add a timer? → Gate it on `DebugSettings.skipTimers`.
 - [ ] Did I add a new persistent field? → Did I add the Room migration?
 - [ ] Did I add a new property + setter function? → Make sure they don't collide on JVM.
-- [ ] Am I on `main`? Am I about to push to `main`? (`git branch --show-current`)
+- [ ] Am I on a `claude/<topic>` branch (not `main`)? (`git branch --show-current`)
 - [ ] Did I read all of CLAUDE.md? If you said yes but skipped this checklist, you didn't.
 
 ---
