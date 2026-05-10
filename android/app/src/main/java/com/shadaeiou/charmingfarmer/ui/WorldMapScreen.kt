@@ -94,20 +94,11 @@ fun WorldMapScreen(
     DisposableEffect(Unit) { onDispose { game.save() } }
 
     if (transportOpen) {
-        // Map is the world hub, so open transport with the FARM silo as the
-        // default origin — that's where most cargo lives. The destination
-        // list is everything reachable; Location.accepts() filters per
-        // item so the player only sees sensible routes.
+        // The panel itself owns the source + destination pickers so the
+        // dialog looks identical whether opened from the world map, a
+        // building screen, etc.
         TransportPanel(
             transport = transport,
-            origin = Location.FARM,
-            allowedDestinations = listOf(
-                Location.MALTHOUSE,
-                Location.BREWERY,
-                Location.KITCHEN,
-                Location.MARKET,
-                Location.CELLAR,
-            ),
             onDismiss = { transportOpen = false },
         )
     }
