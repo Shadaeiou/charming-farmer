@@ -87,8 +87,6 @@ fun BreweryScreen(onBack: () -> Unit, onOpenMap: () -> Unit) {
     if (transportOpen) {
         TransportPanel(
             transport = transport,
-            origin = Location.BREWERY,
-            allowedDestinations = listOf(Location.MARKET, Location.CELLAR, Location.FARM),
             onDismiss = { transportOpen = false },
         )
     }
