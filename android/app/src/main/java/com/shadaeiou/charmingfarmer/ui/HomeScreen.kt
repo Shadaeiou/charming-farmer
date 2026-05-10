@@ -130,11 +130,6 @@ fun HomeScreen(onOpenSettings: () -> Unit, onOpenMap: () -> Unit) {
     if (transportOpen) {
         TransportPanel(
             transport = transport,
-            origin = com.shadaeiou.charmingfarmer.data.Location.FARM,
-            allowedDestinations = listOf(
-                com.shadaeiou.charmingfarmer.data.Location.MALTHOUSE,
-                com.shadaeiou.charmingfarmer.data.Location.BREWERY,
-            ),
             onDismiss = { transportOpen = false },
         )
     }
