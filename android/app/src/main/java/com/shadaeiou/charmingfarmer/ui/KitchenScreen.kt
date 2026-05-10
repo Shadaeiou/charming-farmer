@@ -89,10 +89,7 @@ fun KitchenScreen(onBack: () -> Unit, onOpenMap: () -> Unit) {
     if (transportOpen) {
         TransportPanel(
             transport = transport,
-            origin = Location.FARM,
-            allowedDestinations = listOf(Location.MARKET),
             onDismiss = { transportOpen = false },
-            cargoFilter = { it.name.startsWith("DISH_") },
         )
     }
 
@@ -180,7 +177,10 @@ fun KitchenScreen(onBack: () -> Unit, onOpenMap: () -> Unit) {
                 Spacer(Modifier.height(10.dp))
 
                 KitchenSection("📜 Recipes") {
-                    KitchenRecipe.entries.forEach { recipe ->
+                    // Cheapest first; the order is stable regardless of
+                    // affordability, so unaffordable recipes stay greyed
+                    // out in place rather than jumping around.
+                    KitchenRecipe.entries.sortedBy { it.ingredientCoinCost }.forEach { recipe ->
                         val needCoins = state.coins < recipe.ingredientCoinCost
                         val needEnergy = state.energy.toInt() < recipe.cookEnergy
                         val prepBusy = !kitchen.prepSlotFree()
