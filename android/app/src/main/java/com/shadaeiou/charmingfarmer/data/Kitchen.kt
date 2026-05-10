@@ -887,6 +887,13 @@ class Kitchen private constructor(private val appContext: Context) {
         if (finishedCooks.isNotEmpty()) {
             activeRuns.removeAll(finishedCooks)
         }
+        // Once prep is done the prep-start banner ("🔪 Chop for Carrot
+        // Soup…") is stale — clear it so the player sees the default
+        // prompt again.
+        if (updated.isNotEmpty()) {
+            feedback = null
+            feedbackBad = false
+        }
         bump()
     }
 
